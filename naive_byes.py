@@ -77,7 +77,7 @@ accuracy = accuracy_score(y_test, y_pred)
 st.subheader("📩 Enter Your Message")
 
 email = st.text_area(
-    "Email Message",
+    "Message",
     placeholder="Example: Congratulations! You won a free prize. Click now!"
 )
 
