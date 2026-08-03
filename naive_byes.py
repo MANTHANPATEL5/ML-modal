@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 # PAGE
 # ==========================================
 
-st.title("📧 Email Spam Detection")
+st.title("📧 Message Spam Detection")
 
 
 # ==========================================
@@ -74,7 +74,7 @@ accuracy = accuracy_score(y_test, y_pred)
 # USER INPUT
 # ==========================================
 
-st.subheader("📩 Enter Your Email")
+st.subheader("📩 Enter Your Message")
 
 email = st.text_area(
     "Email Message",
@@ -86,7 +86,7 @@ email = st.text_area(
 # PREDICT
 # ==========================================
 
-if st.button("Predict Email"):
+if st.button("Predict Message"):
 
     if email.strip() == "":
         st.warning("Please enter an email message.")
@@ -122,7 +122,7 @@ if st.button("Predict Email"):
         # ======================================
 
         if prediction[0] == "Spam":
-            st.error("🚨 SPAM EMAIL")
+            st.error("🚨 SPAM MESSAGE")
 
         else:
             st.success("✅ HAM / NOT SPAM")
