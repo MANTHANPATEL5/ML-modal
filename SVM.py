@@ -30,7 +30,7 @@ st.write(
 
 
 # ==========================================================
-# LOAD DATASET
+# LOAD DATASET - ONLY ONCE
 # ==========================================================
 
 @st.cache_data
@@ -60,90 +60,121 @@ target = "normalized_label"
 
 
 # ==========================================================
-# DATA
-# ==========================================================
-
-X = df[features].copy()
-
-y = df[target].copy()
-
-
-# ==========================================================
-# MISSING VALUES
-# ==========================================================
-
-X = X.fillna(X.mean())
-
-
-# ==========================================================
-# TRAIN TEST SPLIT
-# ==========================================================
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.20,
-    random_state=42,
-    stratify=y
-)
-
-
-# ==========================================================
-# SCALING
-# ==========================================================
-
-scaler = StandardScaler()
-
-X_train_scaled = scaler.fit_transform(
-    X_train
-)
-
-X_test_scaled = scaler.transform(
-    X_test
-)
-
-
-# ==========================================================
-# TRAIN SVM
+# TRAIN MODEL - ONLY ONCE
 # ==========================================================
 
 @st.cache_resource
-def train_model(X_train_scaled, y_train):
+def train_model(df):
+
+    # ------------------------------------------------------
+    # FEATURES AND TARGET
+    # ------------------------------------------------------
+
+    X = df[features].copy()
+
+    y = df[target].copy()
+
+
+    # ------------------------------------------------------
+    # MISSING VALUES
+    # ------------------------------------------------------
+
+    X = X.fillna(X.mean())
+
+
+    # ------------------------------------------------------
+    # TRAIN TEST SPLIT
+    # ------------------------------------------------------
+
+    X_train, X_test, y_train, y_test = train_test_split(
+
+        X,
+        y,
+
+        test_size=0.20,
+
+        random_state=42,
+
+        stratify=y
+    )
+
+
+    # ------------------------------------------------------
+    # SCALING
+    # ------------------------------------------------------
+
+    scaler = StandardScaler()
+
+
+    X_train_scaled = scaler.fit_transform(
+        X_train
+    )
+
+
+    X_test_scaled = scaler.transform(
+        X_test
+    )
+
+
+    # ------------------------------------------------------
+    # SVM MODEL
+    # ------------------------------------------------------
 
     model = SVC(
+
         kernel="rbf",
+
         C=1.0,
+
         gamma="scale"
     )
 
+
+    # ------------------------------------------------------
+    # TRAIN
+    # ------------------------------------------------------
+
     model.fit(
+
         X_train_scaled,
-        y_train
-    )
 
-    return model
-
-
-with st.spinner("Training SVM model..."):
-
-    model = train_model(
-        X_train_scaled,
         y_train
     )
 
 
+    # ------------------------------------------------------
+    # TEST
+    # ------------------------------------------------------
+
+    y_pred = model.predict(
+
+        X_test_scaled
+    )
+
+
+    # ------------------------------------------------------
+    # ACCURACY
+    # ------------------------------------------------------
+
+    accuracy = accuracy_score(
+
+        y_test,
+
+        y_pred
+    )
+
+
+    # Return everything needed later
+    return model, scaler, accuracy
+
+
 # ==========================================================
-# MODEL ACCURACY
+# TRAINING
 # ==========================================================
 
-y_pred = model.predict(
-    X_test_scaled
-)
+with st.spinner("Training SVM model for the first time..."):
 
-accuracy = accuracy_score(
-    y_test,
-    y_pred
-)
+    model, scaler, accuracy = train_model(df)
 
 
 # ==========================================================
@@ -178,31 +209,45 @@ col1, col2 = st.columns(2)
 with col1:
 
     pressure = st.number_input(
+
         "Pressure",
+
         min_value=0.0,
+
         value=None,
+
         placeholder="Enter Pressure"
     )
 
 
     global_radiation = st.number_input(
+
         "Global Radiation",
+
         min_value=0.0,
+
         value=None,
+
         placeholder="Enter Global Radiation"
     )
 
 
     temp_mean = st.number_input(
+
         "Mean Temperature (°C)",
+
         value=None,
+
         placeholder="Enter Mean Temperature"
     )
 
 
     temp_min = st.number_input(
+
         "Minimum Temperature (°C)",
+
         value=None,
+
         placeholder="Enter Minimum Temperature"
     )
 
@@ -214,24 +259,35 @@ with col1:
 with col2:
 
     temp_max = st.number_input(
+
         "Maximum Temperature (°C)",
+
         value=None,
+
         placeholder="Enter Maximum Temperature"
     )
 
 
     wind_speed = st.number_input(
+
         "Wind Speed",
+
         min_value=0.0,
+
         value=None,
+
         placeholder="Enter Wind Speed"
     )
 
 
     wind_bearing = st.number_input(
+
         "Wind Bearing",
+
         min_value=0.0,
+
         value=None,
+
         placeholder="Enter Wind Bearing"
     )
 
@@ -241,22 +297,33 @@ with col2:
 # ==========================================================
 
 if st.button(
+
     "🔮 Predict Weather",
+
     use_container_width=True
 ):
 
+
     # ======================================================
-    # CHECK EMPTY INPUT
+    # CHECK INPUT
     # ======================================================
 
     if (
+
         pressure is None
+
         or global_radiation is None
+
         or temp_mean is None
+
         or temp_min is None
+
         or temp_max is None
+
         or wind_speed is None
+
         or wind_bearing is None
+
     ):
 
         st.warning(
@@ -271,15 +338,25 @@ if st.button(
     # ======================================================
 
     user_data = pd.DataFrame(
+
         [[
+
             pressure,
+
             global_radiation,
+
             temp_mean,
+
             temp_min,
+
             temp_max,
+
             wind_speed,
+
             wind_bearing
+
         ]],
+
         columns=features
     )
 
@@ -289,6 +366,7 @@ if st.button(
     # ======================================================
 
     user_data_scaled = scaler.transform(
+
         user_data
     )
 
@@ -298,10 +376,13 @@ if st.button(
     # ======================================================
 
     prediction = model.predict(
+
         user_data_scaled
     )
 
+
     predicted_class = int(
+
         prediction[0]
     )
 
@@ -324,7 +405,9 @@ if st.button(
 
 
     predicted_weather = class_labels.get(
+
         predicted_class,
+
         "Unknown"
     )
 
@@ -355,7 +438,9 @@ if st.button(
     with result_col1:
 
         st.metric(
+
             "Weather",
+
             predicted_weather
         )
 
@@ -363,7 +448,9 @@ if st.button(
     with result_col2:
 
         st.metric(
+
             "Rain",
+
             rain_result
         )
 
