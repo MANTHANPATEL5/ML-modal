@@ -3,3 +3,5 @@ pandas
 mlxtend
 scikit-learn
 numpy
+wordcloud
+matplotlib
