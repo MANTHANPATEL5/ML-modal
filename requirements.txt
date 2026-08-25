@@ -7,4 +7,3 @@ wordcloud
 matplotlib
 pypdf
 nltk
-tensorflow
