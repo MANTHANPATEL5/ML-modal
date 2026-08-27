@@ -2,10 +2,15 @@ streamlit
 pandas
 mlxtend
 scikit-learn
-numpy
+
 wordcloud
 matplotlib
 pypdf
 nltk
-tensorflow==2.20.0
+
 pillow
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+deepface==0.0.93
+tensorflow==2.15.1
+keras==2.15.0
