@@ -11,4 +11,4 @@ tensorflow==2.20.0
 pillow
 opencv-python-headless
 deepface
-cv2
+
