@@ -1,5 +1,6 @@
 import streamlit as st
 from pypdf import PdfReader
+from pathlib import Path
 
 # ==========================================
 # PAGE SETTINGS
@@ -12,6 +13,15 @@ st.set_page_config(
 
 st.title("🤖 PDF Question Answer Chatbot")
 
+st.write(
+    "Ask questions based on the Machine Learning PDF."
+)
+
+# ==========================================
+# PDF FILE PATH
+# ==========================================
+
+PDF_FILE = Path(__file__).parent / "Machine_Learning.pdf"
 
 # ==========================================
 # LOAD PDF ONLY ONE TIME
@@ -20,13 +30,12 @@ st.title("🤖 PDF Question Answer Chatbot")
 @st.cache_data
 def load_pdf():
 
-    pdf_file = "Machine_LEarning.pdf"
-
-    reader = PdfReader(pdf_file)
+    reader = PdfReader(str(PDF_FILE))
 
     text = ""
 
     for page in reader.pages:
+
         page_text = page.extract_text()
 
         if page_text:
@@ -35,7 +44,29 @@ def load_pdf():
     return text
 
 
-text = load_pdf()
+# ==========================================
+# LOAD PDF
+# ==========================================
+
+try:
+
+    text = load_pdf()
+
+except FileNotFoundError:
+
+    st.error(
+        "❌ Machine_Learning.pdf was not found."
+    )
+
+    st.stop()
+
+except Exception as e:
+
+    st.error(
+        f"❌ Error loading PDF: {e}"
+    )
+
+    st.stop()
 
 
 # ==========================================
@@ -43,6 +74,7 @@ text = load_pdf()
 # ==========================================
 
 if "messages" not in st.session_state:
+
     st.session_state.messages = []
 
 
@@ -53,6 +85,7 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
+
         st.write(message["content"])
 
 
@@ -60,7 +93,9 @@ for message in st.session_state.messages:
 # USER INPUT
 # ==========================================
 
-question = st.chat_input("Ask a question from the PDF...")
+question = st.chat_input(
+    "Ask a question from the PDF..."
+)
 
 
 if question:
@@ -100,10 +135,19 @@ if question:
 
     question_words = question.lower().split()
 
-    sentences = text.replace("\n", " ").split(".")
+    sentences = (
+        text
+        .replace("\n", " ")
+        .split(".")
+    )
 
     best_sentence = ""
     best_score = 0
+
+
+    # ======================================
+    # MATCH QUESTION WITH PDF
+    # ======================================
 
     for sentence in sentences:
 
@@ -114,9 +158,12 @@ if question:
         for word in question_words:
 
             if len(word) > 2 and word in sentence_lower:
+
                 score += 1
 
+
         if score > best_score:
+
             best_score = score
             best_sentence = sentence.strip()
 
@@ -126,14 +173,29 @@ if question:
     # ======================================
 
     if best_score > 0:
-        answer = best_sentence
-    else:
-        answer = "Sorry, I could not find the answer in the PDF."
 
+        answer = best_sentence
+
+    else:
+
+        answer = (
+            "Sorry, I could not find the answer "
+            "in the PDF."
+        )
+
+
+    # ======================================
+    # SAVE ASSISTANT RESPONSE
+    # ======================================
 
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer
     })
+
+
+    # ======================================
+    # REFRESH
+    # ======================================
 
     st.rerun()
