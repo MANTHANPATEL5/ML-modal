@@ -24,13 +24,16 @@ st.write(
 PDF_FILE = Path(__file__).parent / "Machine_Learning.pdf"
 
 # ==========================================
-# LOAD PDF ONLY ONE TIME
+# LOAD PDF
 # ==========================================
 
 @st.cache_data
 def load_pdf():
 
-    reader = PdfReader(str(PDF_FILE))
+    reader = PdfReader(
+        str(PDF_FILE),
+        strict=False
+    )
 
     text = ""
 
@@ -51,6 +54,14 @@ def load_pdf():
 try:
 
     text = load_pdf()
+
+    if not text.strip():
+
+        st.error(
+            "❌ The PDF was loaded, but no text could be extracted."
+        )
+
+        st.stop()
 
 except FileNotFoundError:
 
@@ -120,7 +131,7 @@ if question:
 
 
     # ======================================
-    # SHOW USER QUESTION
+    # SAVE USER QUESTION
     # ======================================
 
     st.session_state.messages.append({
@@ -161,7 +172,6 @@ if question:
 
                 score += 1
 
-
         if score > best_score:
 
             best_score = score
@@ -185,7 +195,7 @@ if question:
 
 
     # ======================================
-    # SAVE ASSISTANT RESPONSE
+    # SAVE RESPONSE
     # ======================================
 
     st.session_state.messages.append({
