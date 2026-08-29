@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
+from pathlib import Path
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import DBSCAN
@@ -29,7 +30,28 @@ st.write(
 # LOAD DATASET
 # ==========================================================
 
-df = pd.read_csv("LifeExpectancy.csv")
+DATA_FILE = Path(__file__).parent / "LifeExpectancy.csv"
+
+try:
+
+    df = pd.read_csv(DATA_FILE)
+
+except FileNotFoundError:
+
+    st.error(
+        "❌ LifeExpectancy.csv was not found. "
+        "Make sure the CSV file is inside the dbscan folder."
+    )
+
+    st.stop()
+
+except Exception as e:
+
+    st.error(
+        f"❌ Error loading dataset: {e}"
+    )
+
+    st.stop()
 
 
 # ==========================================================
@@ -42,6 +64,31 @@ features = [
     "GDP",
     "Schooling"
 ]
+
+
+# ==========================================================
+# CHECK REQUIRED COLUMNS
+# ==========================================================
+
+missing_columns = [
+    column
+    for column in features
+    if column not in df.columns
+]
+
+if missing_columns:
+
+    st.error(
+        "❌ The following required columns are missing: "
+        + ", ".join(missing_columns)
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# PREPARE DATA
+# ==========================================================
 
 X = df[features].copy()
 
@@ -163,7 +210,9 @@ if st.button("🔍 Find Cluster"):
     # SCALE USER DATA
     # ======================================================
 
-    user_scaled = scaler.transform(user_data)
+    user_scaled = scaler.transform(
+        user_data
+    )
 
 
     # ======================================================
@@ -175,14 +224,18 @@ if st.button("🔍 Find Cluster"):
         axis=1
     )
 
-    nearest_index = np.argmin(distances)
+    nearest_index = np.argmin(
+        distances
+    )
 
 
     # ======================================================
     # GET CLUSTER
     # ======================================================
 
-    predicted_cluster = clusters[nearest_index]
+    predicted_cluster = clusters[
+        nearest_index
+    ]
 
 
     # ======================================================
@@ -194,7 +247,9 @@ if st.button("🔍 Find Cluster"):
 
     if predicted_cluster == -1:
 
-        st.error("🔴 Noise / Outlier")
+        st.error(
+            "🔴 Noise / Outlier"
+        )
 
         result_cluster = "Noise / Outlier"
 
@@ -205,7 +260,9 @@ if st.button("🔍 Find Cluster"):
             f"Cluster {predicted_cluster}"
         )
 
-        result_cluster = f"Cluster {predicted_cluster}"
+        result_cluster = (
+            f"Cluster {predicted_cluster}"
+        )
 
 
     # ======================================================
@@ -216,6 +273,7 @@ if st.button("🔍 Find Cluster"):
 
 
     result = pd.DataFrame({
+
         "Feature": [
             "Life Expectancy",
             "Adult Mortality",
@@ -231,6 +289,7 @@ if st.button("🔍 Find Cluster"):
             schooling,
             result_cluster
         ]
+
     })
 
 
@@ -245,10 +304,14 @@ if st.button("🔍 Find Cluster"):
     # USER INPUT VISUALIZATION
     # ======================================================
 
-    st.subheader("📊 User Input Visualization")
+    st.subheader(
+        "📊 User Input Visualization"
+    )
 
 
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(
+        figsize=(8, 5)
+    )
 
 
     # ------------------------------------------------------
@@ -310,12 +373,14 @@ if st.button("🔍 Find Cluster"):
 
     chart_buffer = BytesIO()
 
+
     fig.savefig(
         chart_buffer,
         format="png",
         dpi=300,
         bbox_inches="tight"
     )
+
 
     chart_buffer.seek(0)
 
