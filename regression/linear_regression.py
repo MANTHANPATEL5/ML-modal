@@ -1,69 +1,233 @@
 import streamlit as st
 import pandas as pd
+from pathlib import Path
+
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
-# Load Dataset
-df = pd.read_csv("house_price_dataset_200_rows.csv")
 
-# Features and Target
-X = df.drop("Price_USD", axis=1)
+# ==========================================================
+# PAGE SETTINGS
+# ==========================================================
+
+st.set_page_config(
+    page_title="House Price Prediction",
+    page_icon="🏠",
+    layout="centered"
+)
+
+
+# ==========================================================
+# LOAD DATASET
+# ==========================================================
+
+# Get the folder where linear_regression.py is located
+BASE_DIR = Path(__file__).resolve().parent
+
+# CSV is in the same folder as linear_regression.py
+DATA_PATH = BASE_DIR / "house_price_dataset_200_rows.csv"
+
+df = pd.read_csv(DATA_PATH)
+
+
+# ==========================================================
+# FEATURES AND TARGET
+# ==========================================================
+
+X = df.drop(
+    "Price_USD",
+    axis=1
+)
+
 y = df["Price_USD"]
 
-# Split Data
+
+# ==========================================================
+# SPLIT DATA
+# ==========================================================
+
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
+    X,
+    y,
     test_size=0.2,
     random_state=42
 )
 
-# Train Model
+
+# ==========================================================
+# TRAIN MODEL
+# ==========================================================
+
 model = LinearRegression()
-model.fit(X_train, y_train)
 
-# Accuracy
-y_pred = model.predict(X_test)
-accuracy = r2_score(y_test, y_pred)
+model.fit(
+    X_train,
+    y_train
+)
 
-# ---------------- Streamlit UI ----------------
+
+# ==========================================================
+# MODEL PREDICTION
+# ==========================================================
+
+y_pred = model.predict(
+    X_test
+)
+
+
+# ==========================================================
+# MODEL ACCURACY
+# ==========================================================
+
+accuracy = r2_score(
+    y_test,
+    y_pred
+)
+
+
+# ==========================================================
+# STREAMLIT UI
+# ==========================================================
 
 st.title("🏠 House Price Prediction")
 
-st.write("Enter House Details")
+st.write(
+    "Enter House Details"
+)
 
-# User Inputs
-area = st.text_input("Enter Area (sqft)")
-bedrooms = st.text_input("Enter Number of Bedrooms")
-bathrooms = st.text_input("Enter Number of Bathrooms")
-age = st.text_input("Enter House Age (Years)")
-garage = st.text_input("Enter Garage Spaces")
-distance = st.text_input("Enter Distance from City (km)")
 
-if st.button("Predict Price"):
+# ==========================================================
+# USER INPUT
+# ==========================================================
 
-    if (
-        area == "" or bedrooms == "" or bathrooms == "" or
-        age == "" or garage == "" or distance == ""
-    ):
-        st.warning("Please enter all values.")
+area = st.number_input(
+    "Enter Area (sqft)",
+    min_value=1.0,
+    step=1.0,
+    value=None,
+    placeholder="Enter area"
+)
+
+bedrooms = st.number_input(
+    "Enter Number of Bedrooms",
+    min_value=1.0,
+    step=1.0,
+    value=None,
+    placeholder="Enter bedrooms"
+)
+
+bathrooms = st.number_input(
+    "Enter Number of Bathrooms",
+    min_value=1.0,
+    step=1.0,
+    value=None,
+    placeholder="Enter bathrooms"
+)
+
+age = st.number_input(
+    "Enter House Age (Years)",
+    min_value=0.0,
+    step=1.0,
+    value=None,
+    placeholder="Enter house age"
+)
+
+garage = st.number_input(
+    "Enter Garage Spaces",
+    min_value=0.0,
+    step=1.0,
+    value=None,
+    placeholder="Enter garage spaces"
+)
+
+distance = st.number_input(
+    "Enter Distance from City (km)",
+    min_value=0.0,
+    step=0.1,
+    value=None,
+    placeholder="Enter distance"
+)
+
+
+# ==========================================================
+# PREDICT BUTTON
+# ==========================================================
+
+if st.button(
+    "🔮 Predict Price",
+    use_container_width=True
+):
+
+    # ======================================================
+    # VALIDATE INPUT
+    # ======================================================
+
+    if area is None:
+
+        st.warning("⚠️ Please enter Area.")
+
+    elif bedrooms is None:
+
+        st.warning("⚠️ Please enter Number of Bedrooms.")
+
+    elif bathrooms is None:
+
+        st.warning("⚠️ Please enter Number of Bathrooms.")
+
+    elif age is None:
+
+        st.warning("⚠️ Please enter House Age.")
+
+    elif garage is None:
+
+        st.warning("⚠️ Please enter Garage Spaces.")
+
+    elif distance is None:
+
+        st.warning("⚠️ Please enter Distance from City.")
+
     else:
-        try:
-            input_data = pd.DataFrame({
-                "Area_sqft": [float(area)],
-                "Bedrooms": [float(bedrooms)],
-                "Bathrooms": [float(bathrooms)],
-                "Age_years": [float(age)],
-                "Garage": [float(garage)],
-                "Distance_km": [float(distance)]
-            })
 
-            prediction = model.predict(input_data)
+        # ==================================================
+        # CREATE INPUT DATA
+        # ==================================================
 
-            st.success(f"🏠 Predicted House Price: ${prediction[0]:,.2f}")
+        input_data = pd.DataFrame({
+            "Area_sqft": [area],
+            "Bedrooms": [bedrooms],
+            "Bathrooms": [bathrooms],
+            "Age_years": [age],
+            "Garage": [garage],
+            "Distance_km": [distance]
+        })
 
-            st.subheader("Model Accuracy")
-            st.write(f"R² Score: {accuracy:.4f}")
 
-        except ValueError:
-            st.error("Please enter numeric values only.")
+        # ==================================================
+        # PREDICT PRICE
+        # ==================================================
+
+        prediction = model.predict(
+            input_data
+        )
+
+
+        # ==================================================
+        # SHOW RESULT
+        # ==================================================
+
+        st.success(
+            f"🏠 Predicted House Price: "
+            f"${prediction[0]:,.2f}"
+        )
+
+
+        # ==================================================
+        # MODEL ACCURACY
+        # ==================================================
+
+        st.subheader("🎯 Model Accuracy")
+
+        st.write(
+            f"R² Score: **{accuracy:.4f}**"
+        )
