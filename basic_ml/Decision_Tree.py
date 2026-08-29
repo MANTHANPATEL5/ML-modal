@@ -1,5 +1,7 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier
@@ -24,40 +26,131 @@ st.write("Decision Tree Classifier using Gini Index")
 # LOAD DATASET
 # ==========================================
 
-df = pd.read_csv("loan_approval_dataset.csv")
+# Get the folder where Decision_Tree.py is located
+DATA_FILE = Path(__file__).parent / "loan_approval_dataset.csv"
+
+try:
+
+    df = pd.read_csv(DATA_FILE)
+
+except FileNotFoundError:
+
+    st.error(
+        "❌ loan_approval_dataset.csv was not found. "
+        "Make sure the CSV file is inside the basic_ml folder."
+    )
+
+    st.stop()
+
+except Exception as e:
+
+    st.error(
+        f"❌ Error loading dataset: {e}"
+    )
+
+    st.stop()
+
+
+# ==========================================
+# REMOVE EXTRA SPACES FROM COLUMN NAMES
+# ==========================================
+
+df.columns = df.columns.str.strip()
 
 
 # ==========================================
 # ENCODING
 # ==========================================
 
-df["Self_Employed"] = df["Self_Employed"].map({
-    "No": 0,
-    "Yes": 1
-})
+if "Self_Employed" in df.columns:
 
-df["Education"] = df["Education"].map({
-    "High School": 0,
-    "Graduate": 1,
-    "Postgraduate": 2
-})
+    df["Self_Employed"] = df["Self_Employed"].map({
+        "No": 0,
+        "Yes": 1
+    })
 
-df["Marital_Status"] = df["Marital_Status"].map({
-    "Single": 0,
-    "Married": 1
-})
 
-df["Loan_Status"] = df["Loan_Status"].map({
-    "Rejected": 0,
-    "Approved": 1
-})
+if "Education" in df.columns:
+
+    df["Education"] = df["Education"].map({
+        "High School": 0,
+        "Graduate": 1,
+        "Postgraduate": 2
+    })
+
+
+if "Marital_Status" in df.columns:
+
+    df["Marital_Status"] = df["Marital_Status"].map({
+        "Single": 0,
+        "Married": 1
+    })
+
+
+if "Loan_Status" in df.columns:
+
+    df["Loan_Status"] = df["Loan_Status"].map({
+        "Rejected": 0,
+        "Approved": 1
+    })
+
+
+# ==========================================
+# REQUIRED COLUMNS
+# ==========================================
+
+required_columns = [
+    "Age",
+    "Annual_Income",
+    "Credit_Score",
+    "Loan_Amount",
+    "Loan_Term_Months",
+    "Employment_Years",
+    "Existing_Loans",
+    "Dependents",
+    "Savings",
+    "Property_Value",
+    "Self_Employed",
+    "Education",
+    "Marital_Status",
+    "Loan_Status"
+]
+
+
+missing_columns = [
+    column
+    for column in required_columns
+    if column not in df.columns
+]
+
+
+if missing_columns:
+
+    st.error(
+        "❌ Required columns are missing from the dataset:\n\n"
+        + ", ".join(missing_columns)
+    )
+
+    st.stop()
+
+
+# ==========================================
+# REMOVE MISSING VALUES
+# ==========================================
+
+df = df.dropna(
+    subset=required_columns
+)
 
 
 # ==========================================
 # X AND Y
 # ==========================================
 
-X = df.drop("Loan_Status", axis=1)
+X = df.drop(
+    "Loan_Status",
+    axis=1
+)
 
 y = df["Loan_Status"]
 
@@ -90,14 +183,19 @@ model = DecisionTreeClassifier(
 # TRAIN MODEL
 # ==========================================
 
-model.fit(X_train, y_train)
+model.fit(
+    X_train,
+    y_train
+)
 
 
 # ==========================================
 # MODEL ACCURACY
 # ==========================================
 
-y_pred = model.predict(X_test)
+y_pred = model.predict(
+    X_test
+)
 
 accuracy = accuracy_score(
     y_test,
@@ -140,12 +238,14 @@ with col1:
         placeholder="Enter age"
     )
 
+
     annual_income = st.number_input(
         "Annual Income",
         min_value=0.0,
         value=None,
         placeholder="Enter annual income"
     )
+
 
     credit_score = st.number_input(
         "Credit Score",
@@ -155,12 +255,14 @@ with col1:
         placeholder="Enter credit score"
     )
 
+
     loan_amount = st.number_input(
         "Loan Amount",
         min_value=0.0,
         value=None,
         placeholder="Enter loan amount"
     )
+
 
     loan_term = st.selectbox(
         "Loan Term (Months)",
@@ -175,6 +277,7 @@ with col1:
             84
         ]
     )
+
 
     employment_years = st.number_input(
         "Employment Years",
@@ -199,6 +302,7 @@ with col2:
         placeholder="Enter existing loans"
     )
 
+
     dependents = st.number_input(
         "Dependents",
         min_value=0,
@@ -207,6 +311,7 @@ with col2:
         placeholder="Enter dependents"
     )
 
+
     savings = st.number_input(
         "Savings",
         min_value=0.0,
@@ -214,12 +319,14 @@ with col2:
         placeholder="Enter savings"
     )
 
+
     property_value = st.number_input(
         "Property Value",
         min_value=0.0,
         value=None,
         placeholder="Enter property value"
     )
+
 
     self_employed = st.selectbox(
         "Self Employed",
@@ -230,6 +337,7 @@ with col2:
         ]
     )
 
+
     education = st.selectbox(
         "Education",
         [
@@ -239,6 +347,7 @@ with col2:
             "Postgraduate"
         ]
     )
+
 
     marital_status = st.selectbox(
         "Marital Status",
@@ -300,7 +409,6 @@ if st.button("🔍 Predict Loan"):
             "⚠️ Please fill in all details before prediction."
         )
 
-
     else:
 
         # ==================================
@@ -312,11 +420,13 @@ if st.button("🔍 Predict Loan"):
             "Yes": 1
         }[self_employed]
 
+
         education_value = {
             "High School": 0,
             "Graduate": 1,
             "Postgraduate": 2
         }[education]
+
 
         marital_status_value = {
             "Single": 0,
@@ -373,6 +483,7 @@ if st.button("🔍 Predict Loan"):
         # ==================================
 
         st.subheader("📋 Prediction Result")
+
 
         if prediction[0] == 1:
 
