@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from pathlib import Path
 
 # ==========================================================
 # PAGE SETTINGS
@@ -20,7 +21,13 @@ st.write("Enter customer details and predict the customer cluster.")
 # 1. LOAD DATASET
 # ==========================================================
 
-df = pd.read_csv("Mall_Customers.csv")
+# Get the folder where kmeans.py is located
+BASE_DIR = Path(__file__).resolve().parent
+
+# CSV is in the same folder as kmeans.py
+DATA_PATH = BASE_DIR / "Mall_Customers.csv"
+
+df = pd.read_csv(DATA_PATH)
 
 # ==========================================================
 # 2. CONVERT GENDER TO NUMERIC
@@ -145,25 +152,38 @@ spending = st.number_input(
 
 if st.button("🔍 Predict Cluster", use_container_width=True):
 
-    # Check user input
+    # ------------------------------------------------------
+    # CHECK USER INPUT
+    # ------------------------------------------------------
+
     if age is None:
+
         st.warning("⚠️ Please enter Age.")
 
     elif gender == "Select Gender":
+
         st.warning("⚠️ Please select Gender.")
 
     elif income is None:
+
         st.warning("⚠️ Please enter Annual Income.")
 
     elif spending is None:
+
         st.warning("⚠️ Please enter Spending Score.")
 
     else:
 
-        # Convert gender
+        # --------------------------------------------------
+        # CONVERT GENDER
+        # --------------------------------------------------
+
         gender_value = 0 if gender == "Male" else 1
 
-        # Create user input
+        # --------------------------------------------------
+        # CREATE USER INPUT
+        # --------------------------------------------------
+
         user_data = [[
             age,
             gender_value,
@@ -171,18 +191,27 @@ if st.button("🔍 Predict Cluster", use_container_width=True):
             spending
         ]]
 
-        # Scale user input
+        # --------------------------------------------------
+        # SCALE USER INPUT
+        # --------------------------------------------------
+
         user_scaled = scaler.transform(user_data)
 
-        # Predict cluster
+        # --------------------------------------------------
+        # PREDICT CLUSTER
+        # --------------------------------------------------
+
         cluster = kmeans.predict(user_scaled)[0]
 
-        # Get customer type
+        # --------------------------------------------------
+        # GET CUSTOMER TYPE
+        # --------------------------------------------------
+
         customer_type = cluster_types[cluster]
 
-        # ==================================================
-        # RESULT
-        # ==================================================
+        # --------------------------------------------------
+        # SHOW RESULT
+        # --------------------------------------------------
 
         st.success(
             f"🎯 Customer belongs to Cluster {cluster}"
