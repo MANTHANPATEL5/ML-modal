@@ -1,5 +1,7 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
+
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -30,13 +32,22 @@ st.write(
 
 
 # ==========================================================
-# LOAD DATASET - ONLY ONCE
+# DATASET PATH
+# ==========================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+
+DATA_PATH = BASE_DIR / "Weather.csv"
+
+
+# ==========================================================
+# LOAD DATASET
 # ==========================================================
 
 @st.cache_data
 def load_data():
 
-    return pd.read_csv("Weather.csv")
+    return pd.read_csv(DATA_PATH)
 
 
 df = load_data()
@@ -60,26 +71,77 @@ target = "normalized_label"
 
 
 # ==========================================================
-# TRAIN MODEL - ONLY ONCE
+# CHECK REQUIRED COLUMNS
+# ==========================================================
+
+required_columns = features + [target]
+
+missing_columns = [
+    column
+    for column in required_columns
+    if column not in df.columns
+]
+
+if missing_columns:
+
+    st.error(
+        f"Missing columns in Weather.csv: {missing_columns}"
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# TRAIN MODEL
 # ==========================================================
 
 @st.cache_resource
-def train_model(df):
+def train_model(data):
 
     # ------------------------------------------------------
     # FEATURES AND TARGET
     # ------------------------------------------------------
 
-    X = df[features].copy()
+    X = data[features].copy()
 
-    y = df[target].copy()
+    y = data[target].copy()
+
+
+    # ------------------------------------------------------
+    # CONVERT TO NUMERIC
+    # ------------------------------------------------------
+
+    for column in features:
+
+        X[column] = pd.to_numeric(
+            X[column],
+            errors="coerce"
+        )
+
+
+    y = pd.to_numeric(
+        y,
+        errors="coerce"
+    )
+
+
+    # ------------------------------------------------------
+    # REMOVE INVALID TARGET ROWS
+    # ------------------------------------------------------
+
+    valid_rows = y.notna()
+
+    X = X.loc[valid_rows]
+    y = y.loc[valid_rows]
 
 
     # ------------------------------------------------------
     # MISSING VALUES
     # ------------------------------------------------------
 
-    X = X.fillna(X.mean())
+    X = X.fillna(
+        X.mean()
+    )
 
 
     # ------------------------------------------------------
@@ -121,11 +183,8 @@ def train_model(df):
     # ------------------------------------------------------
 
     model = SVC(
-
         kernel="rbf",
-
         C=1.0,
-
         gamma="scale"
     )
 
@@ -135,9 +194,7 @@ def train_model(df):
     # ------------------------------------------------------
 
     model.fit(
-
         X_train_scaled,
-
         y_train
     )
 
@@ -147,7 +204,6 @@ def train_model(df):
     # ------------------------------------------------------
 
     y_pred = model.predict(
-
         X_test_scaled
     )
 
@@ -157,14 +213,11 @@ def train_model(df):
     # ------------------------------------------------------
 
     accuracy = accuracy_score(
-
         y_test,
-
         y_pred
     )
 
 
-    # Return everything needed later
     return model, scaler, accuracy
 
 
@@ -172,13 +225,15 @@ def train_model(df):
 # TRAINING
 # ==========================================================
 
-with st.spinner("Training SVM model for the first time..."):
+with st.spinner(
+    "Training SVM model..."
+):
 
     model, scaler, accuracy = train_model(df)
 
 
 # ==========================================================
-# ACCURACY
+# MODEL ACCURACY
 # ==========================================================
 
 st.subheader("🎯 Model Accuracy")
@@ -209,45 +264,31 @@ col1, col2 = st.columns(2)
 with col1:
 
     pressure = st.number_input(
-
         "Pressure",
-
         min_value=0.0,
-
         value=None,
-
         placeholder="Enter Pressure"
     )
 
 
     global_radiation = st.number_input(
-
         "Global Radiation",
-
         min_value=0.0,
-
         value=None,
-
         placeholder="Enter Global Radiation"
     )
 
 
     temp_mean = st.number_input(
-
         "Mean Temperature (°C)",
-
         value=None,
-
         placeholder="Enter Mean Temperature"
     )
 
 
     temp_min = st.number_input(
-
         "Minimum Temperature (°C)",
-
         value=None,
-
         placeholder="Enter Minimum Temperature"
     )
 
@@ -259,35 +300,25 @@ with col1:
 with col2:
 
     temp_max = st.number_input(
-
         "Maximum Temperature (°C)",
-
         value=None,
-
         placeholder="Enter Maximum Temperature"
     )
 
 
     wind_speed = st.number_input(
-
         "Wind Speed",
-
         min_value=0.0,
-
         value=None,
-
         placeholder="Enter Wind Speed"
     )
 
 
     wind_bearing = st.number_input(
-
         "Wind Bearing",
-
         min_value=0.0,
-
+        max_value=360.0,
         value=None,
-
         placeholder="Enter Wind Bearing"
     )
 
@@ -297,37 +328,72 @@ with col2:
 # ==========================================================
 
 if st.button(
-
     "🔮 Predict Weather",
-
     use_container_width=True
 ):
 
-
     # ======================================================
-    # CHECK INPUT
+    # VALIDATION
     # ======================================================
 
-    if (
-
-        pressure is None
-
-        or global_radiation is None
-
-        or temp_mean is None
-
-        or temp_min is None
-
-        or temp_max is None
-
-        or wind_speed is None
-
-        or wind_bearing is None
-
-    ):
+    if pressure is None:
 
         st.warning(
-            "⚠️ Please enter all weather values before prediction."
+            "⚠️ Please enter Pressure."
+        )
+
+        st.stop()
+
+
+    if global_radiation is None:
+
+        st.warning(
+            "⚠️ Please enter Global Radiation."
+        )
+
+        st.stop()
+
+
+    if temp_mean is None:
+
+        st.warning(
+            "⚠️ Please enter Mean Temperature."
+        )
+
+        st.stop()
+
+
+    if temp_min is None:
+
+        st.warning(
+            "⚠️ Please enter Minimum Temperature."
+        )
+
+        st.stop()
+
+
+    if temp_max is None:
+
+        st.warning(
+            "⚠️ Please enter Maximum Temperature."
+        )
+
+        st.stop()
+
+
+    if wind_speed is None:
+
+        st.warning(
+            "⚠️ Please enter Wind Speed."
+        )
+
+        st.stop()
+
+
+    if wind_bearing is None:
+
+        st.warning(
+            "⚠️ Please enter Wind Bearing."
         )
 
         st.stop()
@@ -338,25 +404,15 @@ if st.button(
     # ======================================================
 
     user_data = pd.DataFrame(
-
         [[
-
             pressure,
-
             global_radiation,
-
             temp_mean,
-
             temp_min,
-
             temp_max,
-
             wind_speed,
-
             wind_bearing
-
         ]],
-
         columns=features
     )
 
@@ -366,7 +422,6 @@ if st.button(
     # ======================================================
 
     user_data_scaled = scaler.transform(
-
         user_data
     )
 
@@ -376,13 +431,11 @@ if st.button(
     # ======================================================
 
     prediction = model.predict(
-
         user_data_scaled
     )
 
 
     predicted_class = int(
-
         prediction[0]
     )
 
@@ -400,14 +453,11 @@ if st.button(
         2: "Cloudy",
 
         3: "Storm"
-
     }
 
 
     predicted_weather = class_labels.get(
-
         predicted_class,
-
         "Unknown"
     )
 
@@ -429,7 +479,9 @@ if st.button(
     # RESULT
     # ======================================================
 
-    st.subheader("🔮 Prediction Result")
+    st.subheader(
+        "🔮 Prediction Result"
+    )
 
 
     result_col1, result_col2 = st.columns(2)
@@ -438,9 +490,7 @@ if st.button(
     with result_col1:
 
         st.metric(
-
             "Weather",
-
             predicted_weather
         )
 
@@ -448,9 +498,7 @@ if st.button(
     with result_col2:
 
         st.metric(
-
             "Rain",
-
             rain_result
         )
 
