@@ -1,6 +1,5 @@
-
 streamlit
+deepface==0.0.100
 opencv-python-headless
-numpy
 pillow
-deepface
+numpy
