@@ -19,12 +19,24 @@ st.set_page_config(
 
 
 # ==========================================================
+# TITLE
+# ==========================================================
+
+st.title("🩺 Diabetes Prediction using Logistic Regression")
+
+st.write(
+    "Enter patient information to predict diabetes."
+)
+
+
+# ==========================================================
 # LOAD DATASET
 # ==========================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DATA_PATH = BASE_DIR / "diabetes.csv"
+# Your actual GitHub filename contains a space before .csv
+DATA_PATH = BASE_DIR / "diabetes .csv"
 
 df = pd.read_csv(DATA_PATH)
 
@@ -71,7 +83,9 @@ model.fit(
 # MODEL ACCURACY
 # ==========================================================
 
-y_pred = model.predict(X_test)
+y_pred = model.predict(
+    X_test
+)
 
 accuracy = accuracy_score(
     y_test,
@@ -80,21 +94,10 @@ accuracy = accuracy_score(
 
 
 # ==========================================================
-# STREAMLIT UI
-# ==========================================================
-
-st.title(
-    "🩺 Diabetes Prediction using Logistic Regression"
-)
-
-st.write(
-    "Enter patient information to predict diabetes."
-)
-
-
-# ==========================================================
 # USER INPUT
 # ==========================================================
+
+st.header("👤 Patient Information")
 
 preg = st.text_input(
     "Pregnancies",
@@ -189,9 +192,7 @@ if st.button(
         # RESULT
         # ==================================================
 
-        st.subheader(
-            "🎯 Prediction"
-        )
+        st.subheader("🎯 Prediction")
 
 
         if prediction[0] == 1:
@@ -211,9 +212,7 @@ if st.button(
         # PROBABILITY
         # ==================================================
 
-        st.subheader(
-            "📊 Prediction Probability"
-        )
+        st.subheader("📊 Prediction Probability")
 
         st.write(
             f"Diabetic: **{probability[0][1] * 100:.2f}%**"
@@ -231,7 +230,7 @@ if st.button(
         st.divider()
 
         st.metric(
-            "Model Accuracy",
+            "🎯 Model Accuracy",
             f"{accuracy * 100:.2f}%"
         )
 
