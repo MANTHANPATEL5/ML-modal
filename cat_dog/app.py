@@ -3,6 +3,7 @@ import tensorflow as tf
 from PIL import Image, UnidentifiedImageError
 from io import BytesIO
 import numpy as np
+from pathlib import Path
 
 # ==========================================================
 # PAGE SETTINGS
@@ -21,12 +22,21 @@ st.write(
 )
 
 # ==========================================================
+# MODEL PATH
+# ==========================================================
+
+MODEL_PATH = Path(__file__).parent / "cat_dog_model.keras"
+
+# ==========================================================
 # LOAD MODEL
 # ==========================================================
 
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("cat_dog_model.keras")
+    return tf.keras.models.load_model(
+        MODEL_PATH,
+        compile=False
+    )
 
 model = load_model()
 
@@ -47,30 +57,58 @@ if uploaded_file is not None:
 
     try:
 
+        # --------------------------------------------------
         # Read uploaded file
+        # --------------------------------------------------
+
         image_bytes = uploaded_file.getvalue()
 
+        # --------------------------------------------------
         # Open image
-        image = Image.open(BytesIO(image_bytes))
+        # --------------------------------------------------
 
+        image = Image.open(
+            BytesIO(image_bytes)
+        )
+
+        # --------------------------------------------------
         # Convert to RGB
+        # --------------------------------------------------
+
         image = image.convert("RGB")
 
+        # --------------------------------------------------
         # Display image
+        # --------------------------------------------------
+
         st.image(
             image,
             caption="Uploaded Image",
             width="stretch"
         )
 
-        # Resize
-        img = image.resize((160, 160))
+        # --------------------------------------------------
+        # Resize image
+        # --------------------------------------------------
 
-        # Convert to NumPy
+        img = image.resize(
+            (160, 160)
+        )
+
+        # --------------------------------------------------
+        # Convert to NumPy array
+        # --------------------------------------------------
+
         img_array = np.array(img)
 
+        # --------------------------------------------------
         # Add batch dimension
-        img_array = np.expand_dims(img_array, axis=0)
+        # --------------------------------------------------
+
+        img_array = np.expand_dims(
+            img_array,
+            axis=0
+        )
 
         # ==================================================
         # PREDICTION
@@ -95,16 +133,27 @@ if uploaded_file is not None:
             result = "🐱 CAT"
             confidence = (1 - prediction) * 100
 
+        # --------------------------------------------------
+        # Display result
+        # --------------------------------------------------
+
         st.subheader("Prediction")
 
         if prediction >= 0.5:
+
             st.success(result)
+
         else:
+
             st.info(result)
 
         st.write(
             f"Confidence: **{confidence:.2f}%**"
         )
+
+    # ======================================================
+    # IMAGE ERROR
+    # ======================================================
 
     except UnidentifiedImageError:
 
@@ -113,6 +162,12 @@ if uploaded_file is not None:
             "Please upload a valid image."
         )
 
+    # ======================================================
+    # OTHER ERRORS
+    # ======================================================
+
     except Exception as e:
 
-        st.error(f"❌ Error: {e}")
+        st.error(
+            f"❌ Error: {e}"
+        )
