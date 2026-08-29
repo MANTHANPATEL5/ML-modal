@@ -18,7 +18,7 @@ st.title("📧 Message Spam Detection")
 # LOAD DATASET
 # ==========================================
 
-df = pd.read_csv("email_spam_dataset_10000_unique.csv")
+df = pd.read_csv("ham_spam_dataset.csv")
 
 
 # ==========================================
