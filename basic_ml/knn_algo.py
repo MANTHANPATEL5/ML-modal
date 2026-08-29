@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -33,7 +34,13 @@ st.write(
 # LOAD DATASET
 # ==========================================================
 
-df = pd.read_csv("Heart_Disease.csv")
+# Get the folder where this Python file is located
+BASE_DIR = Path(__file__).resolve().parent
+
+# Heart_Disease.csv is in the same folder
+DATA_PATH = BASE_DIR / "Heart_Disease.csv"
+
+df = pd.read_csv(DATA_PATH)
 
 
 # ==========================================================
@@ -420,11 +427,8 @@ if predict_button:
         # ==================================================
 
         if sex == "Male (1)":
-
             sex_value = 1
-
         else:
-
             sex_value = 0
 
 
@@ -442,11 +446,8 @@ if predict_button:
         # ==================================================
 
         if fasting_blood_sugar == "Yes (1)":
-
             fasting_value = 1
-
         else:
-
             fasting_value = 0
 
 
@@ -464,11 +465,8 @@ if predict_button:
         # ==================================================
 
         if exercise_angina == "Yes (1)":
-
             exercise_value = 1
-
         else:
-
             exercise_value = 0
 
 
