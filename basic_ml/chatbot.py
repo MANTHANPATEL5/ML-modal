@@ -8,7 +8,8 @@ import re
 
 st.set_page_config(
     page_title="PDF Chatbot",
-    page_icon="🤖"
+    page_icon="🤖",
+    layout="centered"
 )
 
 st.title("🤖 PDF Question Answer Chatbot")
@@ -27,202 +28,261 @@ uploaded_file = st.file_uploader(
 )
 
 # ==========================================
-# LOAD PDF
+# CHECK PDF
 # ==========================================
 
-if uploaded_file is not None:
+if uploaded_file is None:
 
-    try:
+    st.info("📄 Please upload a PDF to start.")
 
-        reader = PdfReader(uploaded_file)
+    st.stop()
 
-        text = ""
 
-        for page in reader.pages:
+# ==========================================
+# READ PDF
+# ==========================================
 
-            page_text = page.extract_text()
+try:
 
-            if page_text:
-                text += page_text + "\n"
+    reader = PdfReader(uploaded_file)
 
-        # ==========================================
-        # CHECK TEXT
-        # ==========================================
+    text = ""
 
-        if not text.strip():
+    for page in reader.pages:
 
-            st.error(
-                "❌ No readable text was found in this PDF."
-            )
+        page_text = page.extract_text()
 
-            st.stop()
+        if page_text:
+            text += page_text + "\n"
 
-        st.success(
-            f"✅ PDF uploaded successfully! "
-            f"Pages: {len(reader.pages)}"
-        )
+except Exception as e:
 
-        # ==========================================
-        # CHAT HISTORY
-        # ==========================================
+    st.error(f"❌ Error reading PDF: {e}")
 
-        if "messages" not in st.session_state:
+    st.stop()
 
-            st.session_state.messages = []
 
-        # ==========================================
-        # DISPLAY CHAT HISTORY
-        # ==========================================
+# ==========================================
+# CHECK EXTRACTED TEXT
+# ==========================================
 
-        for message in st.session_state.messages:
+if not text.strip():
 
-            with st.chat_message(message["role"]):
-
-                st.write(message["content"])
-
-        # ==========================================
-        # USER QUESTION
-        # ==========================================
-
-        question = st.chat_input(
-            "Ask a question from the PDF..."
-        )
-
-        if question:
-
-            # ======================================
-            # EXIT COMMAND
-            # ======================================
-
-            if question.lower().strip() == "exit":
-
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": question
-                })
-
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": "Goodbye! 👋"
-                })
-
-                st.rerun()
-
-            # ======================================
-            # SAVE USER QUESTION
-            # ======================================
-
-            st.session_state.messages.append({
-                "role": "user",
-                "content": question
-            })
-
-            # ======================================
-            # CLEAN QUESTION
-            # ======================================
-
-            question_words = re.findall(
-                r'\b\w+\b',
-                question.lower()
-            )
-
-            # Remove very common words
-            stop_words = {
-                "what", "is", "are", "the", "a",
-                "an", "of", "to", "in", "on",
-                "for", "and", "or", "how", "why",
-                "when", "where", "which", "who",
-                "can", "does", "do"
-            }
-
-            question_words = [
-                word
-                for word in question_words
-                if len(word) > 2
-                and word not in stop_words
-            ]
-
-            # ======================================
-            # SPLIT PDF INTO SENTENCES
-            # ======================================
-
-            sentences = re.split(
-                r'(?<=[.!?])\s+',
-                text.replace("\n", " ")
-            )
-
-            # ======================================
-            # FIND BEST ANSWER
-            # ======================================
-
-            best_sentences = []
-
-            for sentence in sentences:
-
-                sentence_lower = sentence.lower()
-
-                score = 0
-
-                for word in question_words:
-
-                    if word in sentence_lower:
-                        score += 1
-
-                if score > 0:
-
-                    best_sentences.append(
-                        (score, sentence.strip())
-                    )
-
-            # ======================================
-            # SORT RESULTS
-            # ======================================
-
-            best_sentences.sort(
-                key=lambda x: x[0],
-                reverse=True
-            )
-
-            # ======================================
-            # RESPONSE
-            # ======================================
-
-            if best_sentences:
-
-                # Take up to 3 relevant sentences
-                selected_sentences = [
-                    item[1]
-                    for item in best_sentences[:3]
-                ]
-
-                answer = " ".join(
-                    selected_sentences
-                )
-
-            else:
-
-                answer = (
-                    "Sorry, I could not find the answer "
-                    "in the uploaded PDF."
-                )
-
-            # ======================================
-            # SAVE RESPONSE
-            # ======================================
-
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": answer
-            })
-
-            # ======================================
-            # REFRESH
-            # ======================================
-
-            st.rerun()
-
-else:
-
-    st.info(
-        "📄 Please upload a PDF to start asking questions."
+    st.error(
+        "❌ No readable text was found in this PDF."
     )
+
+    st.stop()
+
+
+# ==========================================
+# PDF SUCCESS MESSAGE
+# ==========================================
+
+st.success(
+    f"✅ PDF uploaded successfully! "
+    f"Pages: {len(reader.pages)}"
+)
+
+
+# ==========================================
+# CHAT HISTORY
+# ==========================================
+
+if "messages" not in st.session_state:
+
+    st.session_state.messages = []
+
+
+# ==========================================
+# DISPLAY CHAT HISTORY
+# ==========================================
+
+for message in st.session_state.messages:
+
+    with st.chat_message(message["role"]):
+
+        st.write(message["content"])
+
+
+# ==========================================
+# USER QUESTION
+# ==========================================
+
+question = st.chat_input(
+    "Ask a question from the PDF..."
+)
+
+
+# ==========================================
+# PROCESS QUESTION
+# ==========================================
+
+if question:
+
+    # ======================================
+    # EXIT
+    # ======================================
+
+    if question.lower().strip() == "exit":
+
+        st.session_state.messages.append({
+            "role": "user",
+            "content": question
+        })
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": "Goodbye! 👋"
+        })
+
+        st.rerun()
+
+
+    # ======================================
+    # SAVE USER QUESTION
+    # ======================================
+
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question
+    })
+
+
+    # ======================================
+    # CLEAN QUESTION
+    # ======================================
+
+    question_words = re.findall(
+        r"\b\w+\b",
+        question.lower()
+    )
+
+
+    # ======================================
+    # STOP WORDS
+    # ======================================
+
+    stop_words = {
+        "what",
+        "is",
+        "are",
+        "the",
+        "a",
+        "an",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "and",
+        "or",
+        "how",
+        "why",
+        "when",
+        "where",
+        "which",
+        "who",
+        "can",
+        "does",
+        "do"
+    }
+
+
+    question_words = [
+        word
+        for word in question_words
+        if len(word) > 2
+        and word not in stop_words
+    ]
+
+
+    # ======================================
+    # SPLIT PDF INTO SENTENCES
+    # ======================================
+
+    sentences = re.split(
+        r"(?<=[.!?])\s+",
+        text.replace("\n", " ")
+    )
+
+
+    # ======================================
+    # SEARCH PDF
+    # ======================================
+
+    results = []
+
+
+    for sentence in sentences:
+
+        sentence_lower = sentence.lower()
+
+        score = 0
+
+        for word in question_words:
+
+            if word in sentence_lower:
+
+                score += 1
+
+
+        if score > 0:
+
+            results.append(
+                (score, sentence.strip())
+            )
+
+
+    # ======================================
+    # SORT RESULTS
+    # ======================================
+
+    results.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
+
+    # ======================================
+    # CREATE ANSWER
+    # ======================================
+
+    if results:
+
+        answer_sentences = []
+
+        for score, sentence in results[:3]:
+
+            if sentence not in answer_sentences:
+
+                answer_sentences.append(sentence)
+
+
+        answer = " ".join(
+            answer_sentences
+        )
+
+    else:
+
+        answer = (
+            "Sorry, I could not find the answer "
+            "in the uploaded PDF."
+        )
+
+
+    # ======================================
+    # SAVE ANSWER
+    # ======================================
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": answer
+    })
+
+
+    # ======================================
+    # REFRESH
+    # ======================================
+
+    st.rerun()
