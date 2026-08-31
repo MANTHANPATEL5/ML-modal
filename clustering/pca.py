@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
@@ -30,7 +31,21 @@ st.write(
 # 1. LOAD DATASET
 # ==========================================================
 
-df = pd.read_csv("Wine dataset.csv")
+# Get the folder where pca.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Wine dataset.csv should be in the same folder as pca.py
+DATASET_PATH = os.path.join(BASE_DIR, "Wine dataset.csv")
+
+try:
+    df = pd.read_csv(DATASET_PATH)
+except FileNotFoundError:
+    st.error(
+        "❌ Wine dataset.csv not found.\n\n"
+        "Please place 'Wine dataset.csv' inside the "
+        "'clustering' folder."
+    )
+    st.stop()
 
 
 # ==========================================================
@@ -38,8 +53,19 @@ df = pd.read_csv("Wine dataset.csv")
 # ==========================================================
 
 # Remove class because K-Means is unsupervised
+if "class" in df.columns:
+    X = df.drop("class", axis=1)
+elif "Class" in df.columns:
+    X = df.drop("Class", axis=1)
+else:
+    X = df.copy()
 
-X = df.drop("class", axis=1)
+
+# Make sure all selected columns are numeric
+X = X.apply(pd.to_numeric, errors="coerce")
+
+# Remove rows containing missing values
+X = X.dropna()
 
 
 # ==========================================================
@@ -55,8 +81,7 @@ X_scaled = scaler.fit_transform(X)
 # 4. APPLY PCA
 # ==========================================================
 
-# Reduce 13 features to 2 principal components
-
+# Reduce all features to 2 principal components
 pca = PCA(n_components=2)
 
 X_pca = pca.fit_transform(X_scaled)
@@ -109,10 +134,7 @@ fig, ax = plt.subplots(
 
 
 # Plot clusters
-
-for cluster in sorted(
-    pca_df["Cluster"].unique()
-):
+for cluster in sorted(pca_df["Cluster"].unique()):
 
     points = pca_df[
         pca_df["Cluster"] == cluster
@@ -145,20 +167,14 @@ ax.scatter(
 # GRAPH SETTINGS
 # ==========================================================
 
-ax.set_xlabel(
-    "Principal Component 1"
-)
-
-ax.set_ylabel(
-    "Principal Component 2"
-)
+ax.set_xlabel("Principal Component 1")
+ax.set_ylabel("Principal Component 2")
 
 ax.set_title(
     "PCA + K-Means Clustering"
 )
 
 ax.legend()
-
 ax.grid(True)
 
 st.pyplot(fig)
