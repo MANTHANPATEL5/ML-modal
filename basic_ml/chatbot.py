@@ -1,6 +1,6 @@
 import streamlit as st
 from pypdf import PdfReader
-from pathlib import Path
+import re
 
 # ==========================================
 # PAGE SETTINGS
@@ -14,198 +14,215 @@ st.set_page_config(
 st.title("🤖 PDF Question Answer Chatbot")
 
 st.write(
-    "Ask questions based on the Machine Learning PDF."
+    "Upload a PDF and ask questions based on its content."
 )
 
 # ==========================================
-# PDF FILE PATH
+# PDF UPLOAD
 # ==========================================
 
-PDF_FILE = Path(__file__).parent / "Machine_Learning.pdf"
+uploaded_file = st.file_uploader(
+    "📄 Upload your PDF",
+    type=["pdf"]
+)
 
 # ==========================================
 # LOAD PDF
 # ==========================================
 
-@st.cache_data
-def load_pdf():
+if uploaded_file is not None:
 
-    reader = PdfReader(
-        str(PDF_FILE),
-        strict=False
-    )
+    try:
 
-    text = ""
+        reader = PdfReader(uploaded_file)
 
-    for page in reader.pages:
+        text = ""
 
-        page_text = page.extract_text()
+        for page in reader.pages:
 
-        if page_text:
-            text += page_text + "\n"
+            page_text = page.extract_text()
 
-    return text
+            if page_text:
+                text += page_text + "\n"
 
+        # ==========================================
+        # CHECK TEXT
+        # ==========================================
 
-# ==========================================
-# LOAD PDF
-# ==========================================
+        if not text.strip():
 
-try:
+            st.error(
+                "❌ No readable text was found in this PDF."
+            )
 
-    text = load_pdf()
+            st.stop()
 
-    if not text.strip():
-
-        st.error(
-            "❌ The PDF was loaded, but no text could be extracted."
+        st.success(
+            f"✅ PDF uploaded successfully! "
+            f"Pages: {len(reader.pages)}"
         )
 
-        st.stop()
+        # ==========================================
+        # CHAT HISTORY
+        # ==========================================
 
-except FileNotFoundError:
+        if "messages" not in st.session_state:
 
-    st.error(
-        "❌ Machine_Learning.pdf was not found."
-    )
+            st.session_state.messages = []
 
-    st.stop()
+        # ==========================================
+        # DISPLAY CHAT HISTORY
+        # ==========================================
 
-except Exception as e:
+        for message in st.session_state.messages:
 
-    st.error(
-        f"❌ Error loading PDF: {e}"
-    )
+            with st.chat_message(message["role"]):
 
-    st.stop()
+                st.write(message["content"])
 
+        # ==========================================
+        # USER QUESTION
+        # ==========================================
 
-# ==========================================
-# CHAT HISTORY
-# ==========================================
-
-if "messages" not in st.session_state:
-
-    st.session_state.messages = []
-
-
-# ==========================================
-# DISPLAY CHAT HISTORY
-# ==========================================
-
-for message in st.session_state.messages:
-
-    with st.chat_message(message["role"]):
-
-        st.write(message["content"])
-
-
-# ==========================================
-# USER INPUT
-# ==========================================
-
-question = st.chat_input(
-    "Ask a question from the PDF..."
-)
-
-
-if question:
-
-    # ======================================
-    # EXIT COMMAND
-    # ======================================
-
-    if question.lower().strip() == "exit":
-
-        st.session_state.messages.append({
-            "role": "user",
-            "content": question
-        })
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": "Goodbye! 👋"
-        })
-
-        st.rerun()
-
-
-    # ======================================
-    # SAVE USER QUESTION
-    # ======================================
-
-    st.session_state.messages.append({
-        "role": "user",
-        "content": question
-    })
-
-
-    # ======================================
-    # FIND ANSWER
-    # ======================================
-
-    question_words = question.lower().split()
-
-    sentences = (
-        text
-        .replace("\n", " ")
-        .split(".")
-    )
-
-    best_sentence = ""
-    best_score = 0
-
-
-    # ======================================
-    # MATCH QUESTION WITH PDF
-    # ======================================
-
-    for sentence in sentences:
-
-        sentence_lower = sentence.lower()
-
-        score = 0
-
-        for word in question_words:
-
-            if len(word) > 2 and word in sentence_lower:
-
-                score += 1
-
-        if score > best_score:
-
-            best_score = score
-            best_sentence = sentence.strip()
-
-
-    # ======================================
-    # RESPONSE
-    # ======================================
-
-    if best_score > 0:
-
-        answer = best_sentence
-
-    else:
-
-        answer = (
-            "Sorry, I could not find the answer "
-            "in the PDF."
+        question = st.chat_input(
+            "Ask a question from the PDF..."
         )
 
+        if question:
 
-    # ======================================
-    # SAVE RESPONSE
-    # ======================================
+            # ======================================
+            # EXIT COMMAND
+            # ======================================
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer
-    })
+            if question.lower().strip() == "exit":
 
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": question
+                })
 
-    # ======================================
-    # REFRESH
-    # ======================================
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": "Goodbye! 👋"
+                })
 
-    st.rerun()
+                st.rerun()
+
+            # ======================================
+            # SAVE USER QUESTION
+            # ======================================
+
+            st.session_state.messages.append({
+                "role": "user",
+                "content": question
+            })
+
+            # ======================================
+            # CLEAN QUESTION
+            # ======================================
+
+            question_words = re.findall(
+                r'\b\w+\b',
+                question.lower()
+            )
+
+            # Remove very common words
+            stop_words = {
+                "what", "is", "are", "the", "a",
+                "an", "of", "to", "in", "on",
+                "for", "and", "or", "how", "why",
+                "when", "where", "which", "who",
+                "can", "does", "do"
+            }
+
+            question_words = [
+                word
+                for word in question_words
+                if len(word) > 2
+                and word not in stop_words
+            ]
+
+            # ======================================
+            # SPLIT PDF INTO SENTENCES
+            # ======================================
+
+            sentences = re.split(
+                r'(?<=[.!?])\s+',
+                text.replace("\n", " ")
+            )
+
+            # ======================================
+            # FIND BEST ANSWER
+            # ======================================
+
+            best_sentences = []
+
+            for sentence in sentences:
+
+                sentence_lower = sentence.lower()
+
+                score = 0
+
+                for word in question_words:
+
+                    if word in sentence_lower:
+                        score += 1
+
+                if score > 0:
+
+                    best_sentences.append(
+                        (score, sentence.strip())
+                    )
+
+            # ======================================
+            # SORT RESULTS
+            # ======================================
+
+            best_sentences.sort(
+                key=lambda x: x[0],
+                reverse=True
+            )
+
+            # ======================================
+            # RESPONSE
+            # ======================================
+
+            if best_sentences:
+
+                # Take up to 3 relevant sentences
+                selected_sentences = [
+                    item[1]
+                    for item in best_sentences[:3]
+                ]
+
+                answer = " ".join(
+                    selected_sentences
+                )
+
+            else:
+
+                answer = (
+                    "Sorry, I could not find the answer "
+                    "in the uploaded PDF."
+                )
+
+            # ======================================
+            # SAVE RESPONSE
+            # ======================================
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": answer
+            })
+
+            # ======================================
+            # REFRESH
+            # ======================================
+
+            st.rerun()
+
+else:
+
+    st.info(
+        "📄 Please upload a PDF to start asking questions."
+    )
