@@ -1,7 +1,7 @@
 import os
 
 # Must be before TensorFlow / DeepFace imports
-os.environ["TF_USE_LEGACY_KERAS"] = "1"
+os.environ["TF_USE_LEGACY_KERAS"] = "0"
 
 import streamlit as st
 import cv2
