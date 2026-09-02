@@ -1,14 +1,63 @@
-
 import os
 
-# Must be before TensorFlow / DeepFace imports
+# ==========================================================
+# ENVIRONMENT SETTINGS
+# ==========================================================
+
+# Set before importing TensorFlow / DeepFace
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
+
+# ==========================================================
+# STREAMLIT
+# ==========================================================
+
 import streamlit as st
-import cv2
+
+
+# ==========================================================
+# OPENCV TEST
+# ==========================================================
+
+# Import cv2 separately so Streamlit can show the real error
+try:
+    import cv2
+except Exception as e:
+    st.error("❌ OpenCV (cv2) could not be loaded.")
+    st.code(
+        f"{type(e).__name__}: {e}",
+        language="text"
+    )
+
+    st.warning(
+        "Check requirements.txt and packages.txt in the "
+        "face_recognition folder, then redeploy the app."
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# OTHER IMPORTS
+# ==========================================================
+
 import numpy as np
 from PIL import Image
-from deepface import DeepFace
+
+
+# ==========================================================
+# DEEPFACE TEST
+# ==========================================================
+
+try:
+    from deepface import DeepFace
+except Exception as e:
+    st.error("❌ DeepFace could not be loaded.")
+    st.code(
+        f"{type(e).__name__}: {e}",
+        language="text"
+    )
+    st.stop()
 
 
 # ==========================================================
@@ -21,10 +70,25 @@ st.set_page_config(
     layout="centered"
 )
 
+
+# ==========================================================
+# TITLE
+# ==========================================================
+
 st.title("😀 Face Recognition System")
 
 st.write(
     "Register a person and recognize them using the camera."
+)
+
+
+# ==========================================================
+# OPENCV INFORMATION
+# ==========================================================
+
+# Show OpenCV version only if everything loaded correctly
+st.caption(
+    f"OpenCV: {cv2.__version__}"
 )
 
 
@@ -34,20 +98,36 @@ st.write(
 
 KNOWN_FOLDER = "known_faces"
 
-os.makedirs(KNOWN_FOLDER, exist_ok=True)
+os.makedirs(
+    KNOWN_FOLDER,
+    exist_ok=True
+)
 
 
 # ==========================================================
-# OPENCV FACE DETECTOR
+# FACE DETECTOR
 # ==========================================================
 
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades +
+cascade_path = os.path.join(
+    cv2.data.haarcascades,
     "haarcascade_frontalface_default.xml"
 )
 
+face_cascade = cv2.CascadeClassifier(
+    cascade_path
+)
+
 if face_cascade.empty():
-    st.error("❌ OpenCV face detector could not be loaded.")
+
+    st.error(
+        "❌ OpenCV face detector could not be loaded."
+    )
+
+    st.code(
+        cascade_path,
+        language="text"
+    )
+
     st.stop()
 
 
@@ -71,134 +151,77 @@ with register_tab:
 
     st.header("Register New Person")
 
+    # ------------------------------------------------------
+    # NAME
+    # ------------------------------------------------------
+
     name = st.text_input(
-        "Enter person's name"
+        "Enter person's name",
+        key="register_name"
     )
 
+    # ------------------------------------------------------
+    # CAMERA
+    # ------------------------------------------------------
+
     uploaded_file = st.camera_input(
-        "Take a photo"
+        "Take a photo",
+        key="register_camera"
     )
+
+    # ------------------------------------------------------
+    # IMAGE CAPTURED
+    # ------------------------------------------------------
 
     if uploaded_file is not None:
 
-        image = Image.open(
-            uploaded_file
-        ).convert("RGB")
+        try:
 
-        st.image(
-            image,
-            caption="Captured Image"
-        )
+            # Read image
+            image = Image.open(
+                uploaded_file
+            ).convert("RGB")
 
-        save_button = st.button(
-            "💾 Save Face"
-        )
+            # Display captured image
+            st.image(
+                image,
+                caption="Captured Image"
+            )
 
-        if save_button:
+            # --------------------------------------------------
+            # SAVE BUTTON
+            # --------------------------------------------------
 
-            if not name.strip():
+            if st.button(
+                "💾 Save Face",
+                key="save_face_button"
+            ):
 
-                st.error(
-                    "❌ Please enter a name."
-                )
+                # ------------------------------------------------
+                # CHECK NAME
+                # ------------------------------------------------
 
-            else:
-
-                # ==================================================
-                # CONVERT IMAGE
-                # ==================================================
-
-                image_array = np.array(image)
-
-                frame = cv2.cvtColor(
-                    image_array,
-                    cv2.COLOR_RGB2BGR
-                )
-
-                # ==================================================
-                # GRAYSCALE
-                # ==================================================
-
-                gray = cv2.cvtColor(
-                    frame,
-                    cv2.COLOR_BGR2GRAY
-                )
-
-                # ==================================================
-                # DETECT FACE
-                # ==================================================
-
-                faces = face_cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=1.1,
-                    minNeighbors=5,
-                    minSize=(80, 80)
-                )
-
-                # ==================================================
-                # NO FACE
-                # ==================================================
-
-                if len(faces) == 0:
+                if not name.strip():
 
                     st.error(
-                        "❌ No face detected. "
-                        "Please take another photo."
+                        "❌ Please enter a name."
                     )
-
-                # ==================================================
-                # MULTIPLE FACES
-                # ==================================================
-
-                elif len(faces) > 1:
-
-                    st.error(
-                        "❌ Multiple faces detected. "
-                        "Please capture only one person."
-                    )
-
-                # ==================================================
-                # ONE FACE
-                # ==================================================
 
                 else:
 
-                    x, y, w, h = faces[0]
-
-                    # ==================================================
-                    # CROP FACE
-                    # ==================================================
-
-                    face = frame[
-                        y:y + h,
-                        x:x + w
-                    ]
-
-                    # ==================================================
-                    # DRAW RECTANGLE
-                    # ==================================================
-
-                    display_image = frame.copy()
-
-                    cv2.rectangle(
-                        display_image,
-                        (x, y),
-                        (x + w, y + h),
-                        (0, 255, 0),
-                        3
-                    )
-
-                    # ==================================================
+                    # --------------------------------------------
                     # CLEAN NAME
-                    # ==================================================
+                    # --------------------------------------------
 
                     safe_name = name.strip()
 
                     safe_name = "".join(
                         character
                         for character in safe_name
-                        if character.isalnum()
-                        or character in (" ", "_", "-")
+                        if (
+                            character.isalnum()
+                            or character in (" ", "_", "-")
+                        )
                     )
 
                     safe_name = safe_name.strip()
@@ -211,43 +234,170 @@ with register_tab:
 
                     else:
 
-                        filename = safe_name + ".jpg"
+                        # ----------------------------------------
+                        # PIL → NUMPY
+                        # ----------------------------------------
 
-                        file_path = os.path.join(
-                            KNOWN_FOLDER,
-                            filename
+                        image_array = np.array(
+                            image
                         )
 
-                        # ==================================================
-                        # SAVE FACE
-                        # ==================================================
+                        # ----------------------------------------
+                        # RGB → BGR
+                        # ----------------------------------------
 
-                        success = cv2.imwrite(
-                            file_path,
-                            face
+                        frame = cv2.cvtColor(
+                            image_array,
+                            cv2.COLOR_RGB2BGR
                         )
 
-                        if success:
+                        # ----------------------------------------
+                        # BGR → GRAYSCALE
+                        # ----------------------------------------
 
-                            st.success(
-                                f"✅ {safe_name} registered successfully!"
+                        gray = cv2.cvtColor(
+                            frame,
+                            cv2.COLOR_BGR2GRAY
+                        )
+
+                        # ----------------------------------------
+                        # FACE DETECTION
+                        # ----------------------------------------
+
+                        faces = face_cascade.detectMultiScale(
+                            gray,
+                            scaleFactor=1.1,
+                            minNeighbors=5,
+                            minSize=(80, 80)
+                        )
+
+                        # ----------------------------------------
+                        # NO FACE
+                        # ----------------------------------------
+
+                        if len(faces) == 0:
+
+                            st.error(
+                                "❌ No face detected. "
+                                "Please take another photo."
                             )
 
-                            display_image = cv2.cvtColor(
-                                display_image,
-                                cv2.COLOR_BGR2RGB
+                        # ----------------------------------------
+                        # MULTIPLE FACES
+                        # ----------------------------------------
+
+                        elif len(faces) > 1:
+
+                            st.error(
+                                "❌ Multiple faces detected. "
+                                "Please capture only one person."
                             )
 
-                            st.image(
-                                display_image,
-                                caption="Detected Face"
-                            )
+                        # ----------------------------------------
+                        # ONE FACE
+                        # ----------------------------------------
 
                         else:
 
-                            st.error(
-                                "❌ Failed to save face image."
-                            )
+                            x, y, w, h = faces[0]
+
+                            # ------------------------------------
+                            # CROP FACE
+                            # ------------------------------------
+
+                            face = frame[
+                                y:y + h,
+                                x:x + w
+                            ]
+
+                            # ------------------------------------
+                            # CHECK FACE SIZE
+                            # ------------------------------------
+
+                            if face.size == 0:
+
+                                st.error(
+                                    "❌ Could not crop the face."
+                                )
+
+                            else:
+
+                                # -------------------------------
+                                # DRAW RECTANGLE
+                                # -------------------------------
+
+                                display_image = frame.copy()
+
+                                cv2.rectangle(
+                                    display_image,
+                                    (x, y),
+                                    (x + w, y + h),
+                                    (0, 255, 0),
+                                    3
+                                )
+
+                                # -------------------------------
+                                # FILE NAME
+                                # -------------------------------
+
+                                filename = (
+                                    safe_name +
+                                    ".jpg"
+                                )
+
+                                file_path = os.path.join(
+                                    KNOWN_FOLDER,
+                                    filename
+                                )
+
+                                # -------------------------------
+                                # SAVE FACE
+                                # -------------------------------
+
+                                success = cv2.imwrite(
+                                    file_path,
+                                    face
+                                )
+
+                                if success:
+
+                                    st.success(
+                                        f"✅ {safe_name} "
+                                        "registered successfully!"
+                                    )
+
+                                    # ---------------------------
+                                    # BGR → RGB
+                                    # ---------------------------
+
+                                    display_image = cv2.cvtColor(
+                                        display_image,
+                                        cv2.COLOR_BGR2RGB
+                                    )
+
+                                    st.image(
+                                        display_image,
+                                        caption="Detected Face"
+                                    )
+
+                                else:
+
+                                    st.error(
+                                        "❌ Failed to save "
+                                        "the face image."
+                                    )
+
+        except Exception as e:
+
+            st.error(
+                "❌ Error while processing the "
+                "registration image."
+            )
+
+            st.code(
+                f"{type(e).__name__}: {e}",
+                language="text"
+            )
 
 
 # ==========================================================
@@ -258,239 +408,292 @@ with recognize_tab:
 
     st.header("Recognize Person")
 
+    # ------------------------------------------------------
+    # CAMERA
+    # ------------------------------------------------------
+
     test_image = st.camera_input(
-        "Take a photo to recognize"
+        "Take a photo to recognize",
+        key="recognize_camera"
     )
+
+    # ------------------------------------------------------
+    # IMAGE CAPTURED
+    # ------------------------------------------------------
 
     if test_image is not None:
 
-        image = Image.open(
-            test_image
-        ).convert("RGB")
+        try:
 
-        image_array = np.array(image)
+            # -----------------------------------------------
+            # READ IMAGE
+            # -----------------------------------------------
 
-        # ==================================================
-        # RGB → BGR
-        # ==================================================
+            image = Image.open(
+                test_image
+            ).convert("RGB")
 
-        frame = cv2.cvtColor(
-            image_array,
-            cv2.COLOR_RGB2BGR
-        )
+            # -----------------------------------------------
+            # PIL → NUMPY
+            # -----------------------------------------------
 
-        # ==================================================
-        # GRAYSCALE
-        # ==================================================
-
-        gray = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2GRAY
-        )
-
-        # ==================================================
-        # DETECT FACE
-        # ==================================================
-
-        faces = face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(80, 80)
-        )
-
-        # ==================================================
-        # NO FACE
-        # ==================================================
-
-        if len(faces) == 0:
-
-            st.error(
-                "❌ No face detected."
+            image_array = np.array(
+                image
             )
 
-        # ==================================================
-        # MULTIPLE FACES
-        # ==================================================
+            # -----------------------------------------------
+            # RGB → BGR
+            # -----------------------------------------------
 
-        elif len(faces) > 1:
-
-            st.error(
-                "❌ Multiple faces detected. "
-                "Please capture only one person."
+            frame = cv2.cvtColor(
+                image_array,
+                cv2.COLOR_RGB2BGR
             )
 
-        # ==================================================
-        # ONE FACE
-        # ==================================================
+            # -----------------------------------------------
+            # BGR → GRAYSCALE
+            # -----------------------------------------------
 
-        else:
-
-            x, y, w, h = faces[0]
-
-            # ==================================================
-            # CROP FACE
-            # ==================================================
-
-            face = frame[
-                y:y + h,
-                x:x + w
-            ]
-
-            person_name = "Unknown"
-
-            # ==================================================
-            # GET REGISTERED FACES
-            # ==================================================
-
-            known_files = os.listdir(
-                KNOWN_FOLDER
-            )
-
-            image_files = [
-                file
-                for file in known_files
-                if file.lower().endswith(
-                    (
-                        ".jpg",
-                        ".jpeg",
-                        ".png"
-                    )
-                )
-            ]
-
-            # ==================================================
-            # NO REGISTERED FACES
-            # ==================================================
-
-            if len(image_files) == 0:
-
-                st.warning(
-                    "⚠️ No registered faces found. "
-                    "Please register a person first."
-                )
-
-            # ==================================================
-            # COMPARE FACES
-            # ==================================================
-
-            else:
-
-                for filename in image_files:
-
-                    known_path = os.path.join(
-                        KNOWN_FOLDER,
-                        filename
-                    )
-
-                    try:
-
-                        result = DeepFace.verify(
-                            img1_path=known_path,
-                            img2_path=face,
-                            model_name="VGG-Face",
-                            detector_backend="skip",
-                            enforce_detection=False
-                        )
-
-                        if result.get(
-                            "verified",
-                            False
-                        ):
-
-                            person_name = os.path.splitext(
-                                filename
-                            )[0]
-
-                            break
-
-                    except Exception:
-
-                        continue
-
-            # ==================================================
-            # BOX COLOR
-            # ==================================================
-
-            if person_name == "Unknown":
-
-                box_color = (
-                    0,
-                    0,
-                    255
-                )
-
-            else:
-
-                box_color = (
-                    0,
-                    255,
-                    0
-                )
-
-            # ==================================================
-            # DRAW RECTANGLE
-            # ==================================================
-
-            cv2.rectangle(
+            gray = cv2.cvtColor(
                 frame,
-                (x, y),
-                (x + w, y + h),
-                box_color,
-                3
+                cv2.COLOR_BGR2GRAY
             )
 
-            # ==================================================
-            # DISPLAY NAME
-            # ==================================================
+            # -----------------------------------------------
+            # FACE DETECTION
+            # -----------------------------------------------
 
-            text_y = y - 10
-
-            if text_y < 30:
-
-                text_y = y + h + 30
-
-            cv2.putText(
-                frame,
-                person_name,
-                (x, text_y),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                box_color,
-                2
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(80, 80)
             )
 
-            # ==================================================
-            # BGR → RGB
-            # ==================================================
+            # -----------------------------------------------
+            # NO FACE
+            # -----------------------------------------------
 
-            result_image = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2RGB
-            )
-
-            # ==================================================
-            # DISPLAY RESULT
-            # ==================================================
-
-            st.image(
-                result_image,
-                caption="Recognition Result"
-            )
-
-            # ==================================================
-            # RESULT
-            # ==================================================
-
-            if person_name == "Unknown":
+            if len(faces) == 0:
 
                 st.error(
-                    "❌ Unknown Person"
+                    "❌ No face detected."
                 )
+
+            # -----------------------------------------------
+            # MULTIPLE FACES
+            # -----------------------------------------------
+
+            elif len(faces) > 1:
+
+                st.error(
+                    "❌ Multiple faces detected. "
+                    "Please capture only one person."
+                )
+
+            # -----------------------------------------------
+            # ONE FACE
+            # -----------------------------------------------
 
             else:
 
-                st.success(
-                    f"✅ Known Person: {person_name}"
+                x, y, w, h = faces[0]
+
+                # -------------------------------------------
+                # CROP FACE
+                # -------------------------------------------
+
+                face = frame[
+                    y:y + h,
+                    x:x + w
+                ]
+
+                person_name = "Unknown"
+
+                # -------------------------------------------
+                # GET KNOWN FILES
+                # -------------------------------------------
+
+                try:
+
+                    known_files = os.listdir(
+                        KNOWN_FOLDER
+                    )
+
+                except Exception:
+
+                    known_files = []
+
+                # -------------------------------------------
+                # IMAGE FILES
+                # -------------------------------------------
+
+                image_files = [
+                    file
+                    for file in known_files
+                    if file.lower().endswith(
+                        (
+                            ".jpg",
+                            ".jpeg",
+                            ".png"
+                        )
+                    )
+                ]
+
+                # -------------------------------------------
+                # NO REGISTERED FACES
+                # -------------------------------------------
+
+                if len(image_files) == 0:
+
+                    st.warning(
+                        "⚠️ No registered faces found. "
+                        "Please register a person first."
+                    )
+
+                # -------------------------------------------
+                # COMPARE
+                # -------------------------------------------
+
+                else:
+
+                    for filename in image_files:
+
+                        known_path = os.path.join(
+                            KNOWN_FOLDER,
+                            filename
+                        )
+
+                        try:
+
+                            result = DeepFace.verify(
+                                img1_path=known_path,
+                                img2_path=face,
+                                model_name="VGG-Face",
+                                detector_backend="skip",
+                                enforce_detection=False
+                            )
+
+                            # ------------------------------
+                            # CHECK RESULT
+                            # ------------------------------
+
+                            if result.get(
+                                "verified",
+                                False
+                            ):
+
+                                person_name = (
+                                    os.path.splitext(
+                                        filename
+                                    )[0]
+                                )
+
+                                break
+
+                        except Exception:
+
+                            # Continue with next registered face
+                            continue
+
+                # -------------------------------------------
+                # COLOR
+                # -------------------------------------------
+
+                if person_name == "Unknown":
+
+                    box_color = (
+                        0,
+                        0,
+                        255
+                    )
+
+                else:
+
+                    box_color = (
+                        0,
+                        255,
+                        0
+                    )
+
+                # -------------------------------------------
+                # DRAW FACE RECTANGLE
+                # -------------------------------------------
+
+                cv2.rectangle(
+                    frame,
+                    (x, y),
+                    (x + w, y + h),
+                    box_color,
+                    3
                 )
 
+                # -------------------------------------------
+                # TEXT POSITION
+                # -------------------------------------------
+
+                text_y = y - 10
+
+                if text_y < 30:
+
+                    text_y = y + h + 30
+
+                # -------------------------------------------
+                # DRAW NAME
+                # -------------------------------------------
+
+                cv2.putText(
+                    frame,
+                    person_name,
+                    (x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    box_color,
+                    2
+                )
+
+                # -------------------------------------------
+                # BGR → RGB
+                # -------------------------------------------
+
+                result_image = cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2RGB
+                )
+
+                # -------------------------------------------
+                # DISPLAY RESULT
+                # -------------------------------------------
+
+                st.image(
+                    result_image,
+                    caption="Recognition Result"
+                )
+
+                # -------------------------------------------
+                # RESULT MESSAGE
+                # -------------------------------------------
+
+                if person_name == "Unknown":
+
+                    st.error(
+                        "❌ Unknown Person"
+                    )
+
+                else:
+
+                    st.success(
+                        f"✅ Known Person: {person_name}"
+                    )
+
+        except Exception as e:
+
+            st.error(
+                "❌ Error while processing "
+                "the recognition image."
+            )
+
+            st.code(
+                f"{type(e).__name__}: {e}",
+                language="text"
+            )
