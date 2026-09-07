@@ -1,6 +1,7 @@
 import streamlit as st
 import joblib
 import re
+import os
 
 
 # ==========================================================
@@ -18,12 +19,20 @@ st.set_page_config(
 # LOAD SAVED MODEL PACKAGE
 # ==========================================================
 
+MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "interview_model.pkl"
+)
+
 try:
-    model_package = joblib.load("interview_model.pkl")
+    model_package = joblib.load(MODEL_PATH)
 
 except FileNotFoundError:
     st.error("interview_model.pkl not found.")
-    st.info("Run job_analyzer.py first.")
+    st.info(
+        "Make sure interview_model.pkl is in the same folder "
+        "as npl_job.py."
+    )
     st.stop()
 
 
@@ -122,14 +131,14 @@ def calculate_similarity(text1, text2):
     if not text1.strip() or not text2.strip():
         return 0.0
 
-    vectorizer = TfidfVectorizer(
+    similarity_vectorizer = TfidfVectorizer(
         lowercase=True,
         stop_words="english",
         ngram_range=(1, 2),
         sublinear_tf=True
     )
 
-    vectors = vectorizer.fit_transform(
+    vectors = similarity_vectorizer.fit_transform(
         [text1, text2]
     )
 
@@ -157,13 +166,19 @@ def calculate_interview_score(transcript):
     if word_count == 0:
         return 0.0
 
-    # Interview length component
+    # ------------------------------------------------------
+    # INTERVIEW LENGTH SCORE
+    # ------------------------------------------------------
+
     length_score = min(
         100,
         (word_count / 250) * 100
     )
 
-    # Technical and behavioral indicators
+    # ------------------------------------------------------
+    # TECHNICAL AND BEHAVIORAL INDICATORS
+    # ------------------------------------------------------
+
     indicators = [
         "experience",
         "project",
@@ -199,7 +214,10 @@ def calculate_interview_score(transcript):
         found / len(indicators)
     ) * 100
 
-    # Final interview score
+    # ------------------------------------------------------
+    # FINAL INTERVIEW SCORE
+    # ------------------------------------------------------
+
     score = (
         length_score * 0.30
         +
@@ -221,9 +239,9 @@ if st.button(
     use_container_width=True
 ):
 
-    # ------------------------------------------------------
+    # ======================================================
     # VALIDATION
-    # ------------------------------------------------------
+    # ======================================================
 
     if not candidate_name.strip():
 
@@ -297,7 +315,7 @@ if st.button(
 
 
     # ======================================================
-    # CONFIDENCE
+    # ML CONFIDENCE
     # ======================================================
 
     confidence = 0.0
@@ -336,10 +354,16 @@ if st.button(
                 50
                 +
                 (
-                    50 *
+                    50
+                    *
                     (
-                        1 -
-                        (1 / (1 + score))
+                        1
+                        -
+                        (
+                            1
+                            /
+                            (1 + score)
+                        )
                     )
                 )
             )
@@ -500,8 +524,8 @@ if st.button(
         "🤖 Machine Learning Result"
     )
 
-    # Model name intentionally removed
-    # Test accuracy intentionally removed
+    # Model name removed
+    # Test accuracy removed
 
     st.write(
         f"**Prediction:** "
@@ -543,9 +567,7 @@ if st.button(
 
     if final_score >= 75:
 
-        recommendation = (
-            "Strong Candidate"
-        )
+        recommendation = "Strong Candidate"
 
         st.success(
             f"**{recommendation}**"
@@ -553,9 +575,7 @@ if st.button(
 
     elif final_score >= 60:
 
-        recommendation = (
-            "Potential Candidate"
-        )
+        recommendation = "Potential Candidate"
 
         st.warning(
             f"**{recommendation}**"
@@ -563,9 +583,7 @@ if st.button(
 
     else:
 
-        recommendation = (
-            "Needs Further Review"
-        )
+        recommendation = "Needs Further Review"
 
         st.info(
             f"**{recommendation}**"
@@ -585,10 +603,8 @@ if st.button(
         "📈 Score Breakdown"
     )
 
-    # ------------------------------------------------------
-    # NO st.progress()
-    # ------------------------------------------------------
-    # This removes the blue horizontal bars completely.
+    # No st.progress()
+    # Blue horizontal bars are completely removed.
 
     st.write(
         f"Resume Match — "
