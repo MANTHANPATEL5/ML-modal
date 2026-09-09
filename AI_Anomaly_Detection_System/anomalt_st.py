@@ -1,9 +1,9 @@
-import io
+
+import os
+import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-
-from sklearn.ensemble import IsolationForest
 
 
 # ==========================================================
@@ -22,12 +22,15 @@ st.set_page_config(
 # CONFIGURATION
 # ==========================================================
 
-MAX_TRAIN_ROWS = 100000
-MAX_CHART_ROWS = 5000
+MODEL_FILE = "anomaly_model.pkl"
+SCALER_FILE = "scaler.pkl"
+FEATURE_FILE = "feature_info.pkl"
+
+# Number of rows shown in tables
 DISPLAY_ROWS = 100
 
-DEFAULT_CONTAMINATION = 0.0017
-DEFAULT_TREES = 100
+# Maximum points used for charts
+CHART_SAMPLE_SIZE = 5000
 
 
 # ==========================================================
@@ -75,7 +78,7 @@ st.markdown(
 
 st.markdown(
     '<div class="subtitle">'
-    'Detect unusual patterns using Artificial Intelligence '
+    'Detect unusual transactions using Artificial Intelligence '
     'and Isolation Forest'
     '</div>',
     unsafe_allow_html=True
@@ -83,370 +86,128 @@ st.markdown(
 
 
 # ==========================================================
+# MODEL LOADING
+# ==========================================================
+
+@st.cache_resource
+def load_model_files():
+
+    model = joblib.load(MODEL_FILE)
+    scaler = joblib.load(SCALER_FILE)
+    feature_info = joblib.load(FEATURE_FILE)
+
+    return model, scaler, feature_info
+
+
+# ==========================================================
+# CHECK MODEL FILES
+# ==========================================================
+
+required_files = [
+    MODEL_FILE,
+    SCALER_FILE,
+    FEATURE_FILE
+]
+
+missing_files = [
+    file
+    for file in required_files
+    if not os.path.exists(file)
+]
+
+
+if missing_files:
+
+    st.error("❌ Trained model files are missing.")
+
+    st.write("Missing files:")
+
+    for file in missing_files:
+        st.write(f"• {file}")
+
+    st.warning(
+        "Run train_model.py first."
+    )
+
+    st.code(
+        "python train_model.py",
+        language="bash"
+    )
+
+    st.stop()
+
+
+# ==========================================================
+# LOAD MODEL
+# ==========================================================
+
+try:
+
+    model, scaler, feature_info = load_model_files()
+
+    features = feature_info["features"]
+
+except Exception as e:
+
+    st.error("❌ Unable to load the trained model.")
+
+    st.exception(e)
+
+    st.stop()
+
+
+# ==========================================================
 # SIDEBAR
 # ==========================================================
 
-st.sidebar.title("⚙️ AI Model Settings")
+st.sidebar.title("⚙️ Model Information")
 
-st.sidebar.info(
-    "This system automatically selects useful numeric "
-    "features and detects unusual patterns."
-)
-
-
-trees = st.sidebar.slider(
-    "Number of Trees",
-    min_value=50,
-    max_value=200,
-    value=DEFAULT_TREES,
-    step=10
-)
-
-
-contamination = st.sidebar.slider(
-    "Expected Anomaly Rate",
-    min_value=0.0005,
-    max_value=0.05,
-    value=DEFAULT_CONTAMINATION,
-    step=0.0005,
-    format="%.4f"
-)
-
-
-st.sidebar.markdown("---")
+st.sidebar.success("Model Loaded")
 
 st.sidebar.write(
     "**Algorithm:** Isolation Forest"
 )
 
 st.sidebar.write(
-    "**Learning:** Unsupervised"
+    "**Detection:** Unsupervised"
 )
 
 st.sidebar.write(
-    "**Feature Selection:** Automatic"
+    f"**Features:** {len(features)}"
 )
 
 st.sidebar.write(
-    "**Scaling:** Not required"
+    f"**Trees:** {model.n_estimators}"
 )
 
-st.sidebar.write(
-    f"**Training Limit:** {MAX_TRAIN_ROWS:,} rows"
+st.sidebar.markdown("---")
+
+st.sidebar.info(
+    "The Class column is not used as a model input. "
+    "The AI detects anomalies from transaction patterns."
 )
 
 
 # ==========================================================
-# HELPER: IDENTIFY TARGET / LABEL COLUMNS
+# DATA PROCESSING FUNCTION
 # ==========================================================
 
-def find_label_columns(df):
-    """
-    Identify columns that should not be used as model features.
-    """
-
-    possible_labels = [
-        "class",
-        "label",
-        "target",
-        "fraud",
-        "is_fraud",
-        "anomaly",
-        "anomaly_label",
-        "y"
-    ]
-
-    excluded = []
-
-    for column in df.columns:
-
-        normalized = (
-            str(column)
-            .strip()
-            .lower()
-            .replace(" ", "_")
-        )
-
-        if normalized in possible_labels:
-            excluded.append(column)
-
-    return excluded
-
-
-# ==========================================================
-# HELPER: AUTOMATIC FEATURE SELECTION
-# ==========================================================
-
-def select_features(df):
-    """
-    Automatically select numeric columns suitable for
-    Isolation Forest.
-    """
-
-    label_columns = find_label_columns(df)
-
-    numeric_columns = df.select_dtypes(
-        include=[np.number]
-    ).columns.tolist()
-
-    features = [
-        column
-        for column in numeric_columns
-        if column not in label_columns
-    ]
-
-    return features, label_columns
-
-
-# ==========================================================
-# HELPER: CLEAN FEATURES
-# ==========================================================
-
-def clean_features(df, features):
-    """
-    Clean numeric features.
-
-    Handles:
-    - infinity
-    - missing values
-    - constant columns
-    """
-
-    X = df[features].copy()
-
-    for column in features:
-
-        X[column] = pd.to_numeric(
-            X[column],
-            errors="coerce"
-        )
-
-        X[column] = X[column].replace(
-            [np.inf, -np.inf],
-            np.nan
-        )
-
-        median_value = X[column].median()
-
-        if pd.isna(median_value):
-            median_value = 0.0
-
-        X[column] = X[column].fillna(
-            median_value
-        )
-
-    # Remove constant columns
-    variable_features = []
-
-    for column in X.columns:
-
-        if X[column].nunique(dropna=False) > 1:
-            variable_features.append(column)
-
-    X = X[variable_features]
-
-    return X, variable_features
-
-
-# ==========================================================
-# MODEL TRAINING
-# ==========================================================
-
-@st.cache_resource(show_spinner=False)
-def train_isolation_forest(
-    X,
-    trees,
-    contamination
-):
-
-    # ------------------------------------------------------
-    # Training sample
-    # ------------------------------------------------------
-
-    if len(X) > MAX_TRAIN_ROWS:
-
-        train_data = X.sample(
-            n=MAX_TRAIN_ROWS,
-            random_state=42
-        )
-
-    else:
-
-        train_data = X
-
-    # ------------------------------------------------------
-    # Model
-    # ------------------------------------------------------
-
-    model = IsolationForest(
-        n_estimators=trees,
-        contamination=contamination,
-        random_state=42,
-        n_jobs=-1,
-        max_samples="auto"
-    )
-
-    model.fit(train_data)
-
-    return model
-
-
-# ==========================================================
-# ANOMALY EXPLANATION
-# ==========================================================
-
-def create_explanation(
-    selected_row,
-    normal_data,
-    features
-):
-
-    explanation = []
-
-    for feature in features:
-
-        value = float(
-            selected_row[feature]
-        )
-
-        median_value = float(
-            normal_data[feature].median()
-        )
-
-        std_value = float(
-            normal_data[feature].std()
-        )
-
-        if (
-            std_value == 0
-            or np.isnan(std_value)
-            or np.isinf(std_value)
-        ):
-
-            deviation = 0.0
-
-        else:
-
-            deviation = abs(
-                value - median_value
-            ) / std_value
-
-        explanation.append(
-            {
-                "Feature": feature,
-                "Observed Value": value,
-                "Typical Value": median_value,
-                "Deviation": deviation
-            }
-        )
-
-    explanation_df = pd.DataFrame(
-        explanation
-    )
-
-    explanation_df = explanation_df.sort_values(
-        "Deviation",
-        ascending=False
-    )
-
-    return explanation_df.reset_index(drop=True)
-
-
-# ==========================================================
-# FEATURE ANALYSIS
-# ==========================================================
-
-def calculate_feature_analysis(
-    normal_data,
-    anomaly_data,
-    features
-):
-
-    analysis = []
-
-    for feature in features:
-
-        normal_median = normal_data[
-            feature
-        ].median()
-
-        anomaly_median = anomaly_data[
-            feature
-        ].median()
-
-        difference = abs(
-            anomaly_median
-            - normal_median
-        )
-
-        normal_std = normal_data[
-            feature
-        ].std()
-
-        if (
-            normal_std is None
-            or normal_std == 0
-            or np.isnan(normal_std)
-        ):
-
-            standardized_difference = 0.0
-
-        else:
-
-            standardized_difference = (
-                difference / normal_std
-            )
-
-        analysis.append(
-            {
-                "Feature": feature,
-                "Difference": difference,
-                "Standardized Difference":
-                    standardized_difference
-            }
-        )
-
-    result = pd.DataFrame(
-        analysis
-    )
-
-    return result.sort_values(
-        "Standardized Difference",
-        ascending=False
-    )
-
-
-# ==========================================================
-# CSV PROCESSING
-# ==========================================================
-
-@st.cache_data(
-    show_spinner=False,
-    max_entries=3
-)
-def process_dataset(
-    file_bytes,
-    trees,
-    contamination
-):
+@st.cache_data(show_spinner=False)
+def process_dataset(file_bytes, file_name):
 
     # ------------------------------------------------------
     # Load CSV
     # ------------------------------------------------------
 
+    from io import BytesIO
+
     df = pd.read_csv(
-        io.BytesIO(file_bytes)
+        BytesIO(file_bytes)
     )
 
     # ------------------------------------------------------
-    # Basic validation
+    # Validation
     # ------------------------------------------------------
-
-    if df.empty:
-
-        return {
-            "error": "empty"
-        }
 
     rows = len(df)
 
@@ -461,63 +222,76 @@ def process_dataset(
     )
 
     # ------------------------------------------------------
-    # Feature selection
+    # Required features
     # ------------------------------------------------------
 
-    selected_features, label_columns = select_features(
-        df
-    )
+    missing_features = [
+        feature
+        for feature in features
+        if feature not in df.columns
+    ]
 
-    if len(selected_features) == 0:
+    if missing_features:
 
         return {
-            "error": "no_features"
+            "error": "missing_features",
+            "missing_features": missing_features
         }
 
+
     # ------------------------------------------------------
-    # Clean features
+    # Feature dataframe
     # ------------------------------------------------------
 
-    X, features = clean_features(
-        df,
-        selected_features
+    X = df[
+        features
+    ].copy()
+
+
+    # ------------------------------------------------------
+    # Missing value handling
+    # ------------------------------------------------------
+
+    for column in features:
+
+        X[column] = X[column].replace(
+            [np.inf, -np.inf],
+            np.nan
+        )
+
+        X[column] = X[column].fillna(
+            X[column].median()
+        )
+
+
+    # ------------------------------------------------------
+    # Scaling
+    # ------------------------------------------------------
+
+    X_scaled = scaler.transform(
+        X
     )
 
-    if len(features) == 0:
-
-        return {
-            "error": "no_variable_features"
-        }
-
-    # ------------------------------------------------------
-    # Train model
-    # ------------------------------------------------------
-
-    model = train_isolation_forest(
-        X,
-        trees,
-        contamination
-    )
 
     # ------------------------------------------------------
     # Prediction
     # ------------------------------------------------------
 
     predictions = model.predict(
-        X
+        X_scaled
     )
 
+
     # ------------------------------------------------------
-    # Isolation Forest score
-    #
-    # Higher value = more suspicious
+    # Anomaly score
     # ------------------------------------------------------
 
     decision_scores = model.decision_function(
-        X
+        X_scaled
     )
 
     anomaly_scores = -decision_scores
+
 
     # ------------------------------------------------------
     # Results
@@ -533,18 +307,6 @@ def process_dataset(
         "Normal"
     )
 
-    # ------------------------------------------------------
-    # Sort anomalies
-    # ------------------------------------------------------
-
-    anomalies = results[
-        results["Prediction"] == "Anomaly"
-    ].copy()
-
-    anomalies = anomalies.sort_values(
-        "Anomaly Score",
-        ascending=False
-    )
 
     # ------------------------------------------------------
     # Statistics
@@ -568,30 +330,53 @@ def process_dataset(
         anomaly_count
         / total_records
         * 100
+        if total_records > 0
+        else 0
     )
 
+
     # ------------------------------------------------------
-    # Chart sample
+    # Top anomalies
     # ------------------------------------------------------
 
-    if len(results) > MAX_CHART_ROWS:
+    anomalies = results[
+        results["Prediction"]
+        == "Anomaly"
+    ].copy()
 
-        chart_results = results.sample(
-            MAX_CHART_ROWS,
+    anomalies = anomalies.sort_values(
+        "Anomaly Score",
+        ascending=False
+    )
+
+
+    # ------------------------------------------------------
+    # Chart sampling
+    # ------------------------------------------------------
+
+    if len(results) > CHART_SAMPLE_SIZE:
+
+        chart_results = results[
+            ["Anomaly Score"]
+        ].sample(
+            CHART_SAMPLE_SIZE,
             random_state=42
+        ).sort_values(
+            "Anomaly Score"
+        ).reset_index(
+            drop=True
         )
 
     else:
 
-        chart_results = results.copy()
+        chart_results = results[
+            ["Anomaly Score"]
+        ].sort_values(
+            "Anomaly Score"
+        ).reset_index(
+            drop=True
+        )
 
-    chart_scores = chart_results[
-        ["Anomaly Score"]
-    ].sort_values(
-        "Anomaly Score"
-    ).reset_index(
-        drop=True
-    )
 
     # ------------------------------------------------------
     # Return
@@ -601,12 +386,9 @@ def process_dataset(
         "error": None,
         "df": df,
         "X": X,
-        "features": features,
-        "label_columns": label_columns,
         "results": results,
         "anomalies": anomalies,
-        "chart_results": chart_scores,
-        "model": model,
+        "chart_results": chart_results,
         "rows": rows,
         "columns": columns,
         "missing_values": missing_values,
@@ -619,45 +401,44 @@ def process_dataset(
 
 
 # ==========================================================
-# UPLOAD DATASET
+# CSV UPLOAD
 # ==========================================================
 
 st.header("📁 Upload CSV Dataset")
 
 uploaded_file = st.file_uploader(
-    "Upload your CSV dataset",
+    "Upload your creditcard.csv",
     type=["csv"],
-    help=(
-        "Credit card transactions, IoT data, "
-        "business transactions, sensor data, etc."
-    )
+    help="Upload the CSV used by the trained model."
 )
 
 
 # ==========================================================
-# NO DATASET
+# NO FILE
 # ==========================================================
 
 if uploaded_file is None:
 
     st.info(
-        "👆 Upload a CSV dataset to start AI anomaly detection."
+        "👆 Upload your CSV file to start AI anomaly detection."
     )
 
     st.markdown(
         """
-        ### 🧠 AI Machine Learning Pipeline
+        ### 🔄 Machine Learning Pipeline
 
         ```text
         CSV Dataset
              ↓
         Data Validation
              ↓
-        Automatic Numeric Feature Selection
-             ↓
         Missing-Value Handling
              ↓
-        Isolation Forest Training
+        Scaling
+             ↓
+        Automatic Feature Selection
+             ↓
+        Isolation Forest
              ↓
         Anomaly Score
              ↓
@@ -665,116 +446,68 @@ if uploaded_file is None:
              ↓
         AI Explanation
              ↓
-        Feature Analysis
-             ↓
         Visualization
              ↓
         Download Results
         ```
         """
+
     )
 
-    st.markdown("---")
-
-    st.subheader("📌 Supported Data")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.info(
-            "💳 Credit Card Transactions"
-        )
-
-    with col2:
-        st.info(
-            "🏭 IoT / Sensor Data"
-        )
-
-    with col3:
-        st.info(
-            "🏢 Business Transactions"
-        )
-
     st.stop()
-
-
-# ==========================================================
-# READ FILE
-# ==========================================================
-
-file_bytes = uploaded_file.getvalue()
 
 
 # ==========================================================
 # PROCESS DATA
 # ==========================================================
 
+file_bytes = uploaded_file.getvalue()
+
+file_name = uploaded_file.name
+
+
 with st.spinner(
-    "🤖 AI is analyzing your dataset..."
+    "🤖 AI is analyzing the dataset... Please wait..."
 ):
 
     data = process_dataset(
         file_bytes,
-        trees,
-        contamination
+        file_name
     )
 
 
 # ==========================================================
-# HANDLE ERRORS
+# ERROR
 # ==========================================================
 
-if data["error"] == "empty":
+if data["error"] == "missing_features":
 
     st.error(
-        "❌ The uploaded CSV file is empty."
+        "❌ Required features are missing from the uploaded dataset."
     )
 
-    st.stop()
+    st.write("Missing features:")
 
-
-if data["error"] == "no_features":
-
-    st.error(
-        "❌ No numeric features were found."
-    )
-
-    st.info(
-        "The dataset must contain numeric columns "
-        "that can be analyzed by Isolation Forest."
-    )
-
-    st.stop()
-
-
-if data["error"] == "no_variable_features":
-
-    st.error(
-        "❌ No variable numeric features were found."
+    st.write(
+        data["missing_features"]
     )
 
     st.stop()
 
 
 # ==========================================================
-# EXTRACT DATA
+# EXTRACT RESULTS
 # ==========================================================
 
 df = data["df"]
 
 X = data["X"]
 
-features = data["features"]
-
-label_columns = data["label_columns"]
-
 results = data["results"]
 
 anomalies = data["anomalies"]
 
 chart_results = data["chart_results"]
-
-model = data["model"]
 
 total_records = data["total_records"]
 
@@ -783,30 +516,6 @@ normal_count = data["normal_count"]
 anomaly_count = data["anomaly_count"]
 
 anomaly_rate = data["anomaly_rate"]
-
-
-# ==========================================================
-# MODEL INFORMATION
-# ==========================================================
-
-st.sidebar.markdown("---")
-
-st.sidebar.success(
-    "🤖 Model Ready"
-)
-
-st.sidebar.write(
-    f"**Features Used:** {len(features)}"
-)
-
-st.sidebar.write(
-    f"**Trees:** {model.n_estimators}"
-)
-
-st.sidebar.write(
-    f"**Training Rows:** "
-    f"{min(len(X), MAX_TRAIN_ROWS):,}"
-)
 
 
 # ==========================================================
@@ -844,36 +553,6 @@ with col4:
         "Duplicates",
         f"{data['duplicates']:,}"
     )
-
-
-# ==========================================================
-# AUTOMATIC FEATURE SELECTION
-# ==========================================================
-
-st.header("🧠 Automatic Feature Selection")
-
-st.success(
-    f"{len(features)} numeric features automatically selected."
-)
-
-if label_columns:
-
-    st.info(
-        "Excluded label/target columns: "
-        + ", ".join(
-            map(str, label_columns)
-        )
-    )
-
-st.dataframe(
-    pd.DataFrame(
-        {
-            "Selected Features": features
-        }
-    ),
-    use_container_width=True,
-    height=250
-)
 
 
 # ==========================================================
@@ -938,13 +617,13 @@ st.bar_chart(
 
 
 # ==========================================================
-# SCORE DISTRIBUTION
+# ANOMALY SCORE DISTRIBUTION
 # ==========================================================
 
 st.header("📉 Anomaly Score Distribution")
 
 st.caption(
-    f"Chart uses up to {MAX_CHART_ROWS:,} "
+    f"Visualization uses up to {CHART_SAMPLE_SIZE:,} sampled "
     "records for better performance."
 )
 
@@ -972,65 +651,106 @@ else:
     )
 
     st.caption(
-        "Records are sorted from most suspicious "
-        "to least suspicious."
-    )
-
-    display_anomalies = anomalies.head(
-        DISPLAY_ROWS
+        f"Showing the top {min(DISPLAY_ROWS, anomaly_count):,} "
+        "most suspicious records."
     )
 
     st.dataframe(
-        display_anomalies,
+        anomalies.head(DISPLAY_ROWS),
         use_container_width=True,
         height=450
     )
 
 
 # ==========================================================
-# AI ANOMALY EXPLANATION
+# AI EXPLANATION
 # ==========================================================
 
 st.header("🤖 AI Anomaly Explanation")
 
+
 if anomaly_count > 0:
 
-    max_selection = min(
-        anomaly_count,
-        DISPLAY_ROWS
-    )
+    # ------------------------------------------------------
+    # Select anomaly
+    # ------------------------------------------------------
 
-    selected_number = st.number_input(
-        "Select anomaly",
-        min_value=1,
-        max_value=max_selection,
-        value=1,
+    selected_index = st.number_input(
+        "Select anomaly number",
+        min_value=0,
+        max_value=min(
+            anomaly_count - 1,
+            DISPLAY_ROWS - 1
+        ),
+        value=0,
         step=1
     )
 
+
     selected_row = anomalies.iloc[
-        selected_number - 1
+        selected_index
     ]
 
-    # ------------------------------------------------------
-    # Normal reference data
-    # ------------------------------------------------------
-
-    normal_data = results[
-        results["Prediction"] == "Normal"
-    ]
 
     # ------------------------------------------------------
-    # Explanation
+    # Calculate explanation
     # ------------------------------------------------------
 
-    explanation_df = create_explanation(
-        selected_row,
-        normal_data,
-        features
+    explanation_data = []
+
+    for feature in features:
+
+        value = float(
+            selected_row[feature]
+        )
+
+        median_value = float(
+            X[feature].median()
+        )
+
+        std_value = float(
+            X[feature].std()
+        )
+
+        if std_value == 0 or np.isnan(std_value):
+
+            deviation = 0.0
+
+        else:
+
+            deviation = abs(
+                value - median_value
+            ) / std_value
+
+
+        explanation_data.append(
+            {
+                "Feature": feature,
+                "Observed Value": value,
+                "Typical Value": median_value,
+                "Relative Deviation": deviation
+            }
+        )
+
+
+    explanation_df = pd.DataFrame(
+        explanation_data
     )
 
+    explanation_df = explanation_df.sort_values(
+        "Relative Deviation",
+        ascending=False
+    ).reset_index(
+        drop=True
+    )
+
+
+    # ------------------------------------------------------
+    # Top unusual features
+    # ------------------------------------------------------
+
     top_features = explanation_df.head(5)
+
 
     st.subheader(
         "🔎 Most Unusual Features"
@@ -1041,8 +761,9 @@ if anomaly_count > 0:
         use_container_width=True
     )
 
+
     # ------------------------------------------------------
-    # Strongest feature
+    # Main explanation
     # ------------------------------------------------------
 
     strongest = top_features.iloc[0]
@@ -1060,8 +781,9 @@ if anomaly_count > 0:
     ]
 
     strongest_deviation = strongest[
-        "Deviation"
+        "Relative Deviation"
     ]
+
 
     st.error(
         f"""
@@ -1082,11 +804,9 @@ Typical value:
 Relative deviation:
 {strongest_deviation:.2f} standard deviations
 
-Why was it detected?
-
-The selected transaction contains feature values
-that differ substantially from the normal patterns
-learned by the Isolation Forest model.
+The record was flagged because its combination
+of feature values differs substantially from the
+normal patterns learned by the AI model.
 """
     )
 
@@ -1099,58 +819,59 @@ st.header("📊 Feature Analysis")
 
 if anomaly_count > 0:
 
+    # Use only anomaly records for this analysis.
+    # This avoids repeatedly calculating over all 284k rows.
+
     normal_data = results[
-        results["Prediction"] == "Normal"
+        results["Prediction"]
+        == "Normal"
     ]
 
-    feature_analysis = calculate_feature_analysis(
-        normal_data,
-        anomalies,
-        features
+
+    feature_difference = []
+
+    for feature in features:
+
+        normal_mean = normal_data[
+            feature
+        ].mean()
+
+        anomaly_mean = anomalies[
+            feature
+        ].mean()
+
+        difference = abs(
+            anomaly_mean
+            - normal_mean
+        )
+
+        feature_difference.append(
+            {
+                "Feature": feature,
+                "Difference": difference
+            }
+        )
+
+
+    feature_analysis = pd.DataFrame(
+        feature_difference
     )
+
+    feature_analysis = feature_analysis.sort_values(
+        "Difference",
+        ascending=False
+    )
+
 
     st.caption(
-        "Features are ranked according to how strongly "
-        "their anomalous values differ from normal records."
+        "Top 15 features with the largest difference "
+        "between normal and anomalous records."
     )
-
-    chart_data = feature_analysis.head(
-        15
-    ).set_index(
-        "Feature"
-    )[
-        ["Standardized Difference"]
-    ]
 
     st.bar_chart(
-        chart_data
-    )
-
-    st.subheader(
-        "📋 Feature Difference Details"
-    )
-
-    st.dataframe(
-        feature_analysis.head(15),
-        use_container_width=True
-    )
-
-
-# ==========================================================
-# SELECTED ANOMALY DETAILS
-# ==========================================================
-
-if anomaly_count > 0:
-
-    st.header("🔬 Selected Anomaly Details")
-
-    selected_details = selected_row.to_frame(
-        name="Value"
-    )
-
-    st.dataframe(
-        selected_details,
-        use_container_width=True
+        feature_analysis.head(15).set_index(
+            "Feature"
+        )
     )
 
 
@@ -1161,8 +882,8 @@ if anomaly_count > 0:
 st.header("📋 Complete Results")
 
 st.caption(
-    f"Showing the first {DISPLAY_ROWS:,} records. "
-    "The download button contains the complete dataset."
+    f"Showing first {DISPLAY_ROWS:,} records here. "
+    "The complete dataset is available through the download button."
 )
 
 st.dataframe(
@@ -1180,7 +901,9 @@ st.header("⬇️ Download Results")
 
 csv_output = results.to_csv(
     index=False
-).encode("utf-8")
+).encode(
+    "utf-8"
+)
 
 st.download_button(
     label="⬇️ Download Complete Anomaly Results CSV",
@@ -1188,24 +911,6 @@ st.download_button(
     file_name="anomaly_detection_results.csv",
     mime="text/csv"
 )
-
-
-# ==========================================================
-# DOWNLOAD ANOMALIES ONLY
-# ==========================================================
-
-if anomaly_count > 0:
-
-    anomaly_csv = anomalies.to_csv(
-        index=False
-    ).encode("utf-8")
-
-    st.download_button(
-        label="🚨 Download Anomalies Only",
-        data=anomaly_csv,
-        file_name="detected_anomalies.csv",
-        mime="text/csv"
-    )
 
 
 # ==========================================================
@@ -1217,6 +922,5 @@ st.markdown("---")
 st.caption(
     "🧠 AI Anomaly Detection System | "
     "Isolation Forest | "
-    "Unsupervised Machine Learning | "
-    "Automatic Feature Selection"
+    "Unsupervised Machine Learning"
 )
