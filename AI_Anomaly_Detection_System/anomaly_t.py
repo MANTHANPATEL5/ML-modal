@@ -1,7 +1,8 @@
+
 import os
 import joblib
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
@@ -17,57 +18,91 @@ MODEL_FILE = "anomaly_model.pkl"
 SCALER_FILE = "scaler.pkl"
 FEATURE_FILE = "feature_info.pkl"
 
-CONTAMINATION = 0.0017
 RANDOM_STATE = 42
+
+CONTAMINATION = 0.0017
 
 
 # ==========================================================
 # LOAD DATASET
 # ==========================================================
 
-print("=" * 60)
-print("AI ANOMALY DETECTION - MODEL TRAINING")
-print("=" * 60)
+print("=" * 70)
+print("AI ANOMALY DETECTION SYSTEM")
+print("MODEL TRAINING")
+print("=" * 70)
+
 
 if not os.path.exists(DATASET):
+
     raise FileNotFoundError(
-        f"{DATASET} not found. Put creditcard.csv in this folder."
+        "creditcard.csv not found. "
+        "Put it in the same folder as train_model.py."
     )
 
-df = pd.read_csv(DATASET)
+
+df = pd.read_csv(
+    DATASET
+)
+
 
 print("\nDataset loaded successfully!")
-print("Rows:", len(df))
-print("Columns:", len(df.columns))
+
+print(
+    "Rows:",
+    len(df)
+)
+
+print(
+    "Columns:",
+    len(df.columns)
+)
 
 
 # ==========================================================
 # DATA VALIDATION
 # ==========================================================
 
-print("\nChecking dataset...")
+print("\n" + "=" * 70)
+print("DATA VALIDATION")
+print("=" * 70)
 
-print("\nMissing values:")
-print(df.isnull().sum().sum())
+print(
+    "Missing values:",
+    df.isnull().sum().sum()
+)
 
-print("\nDuplicate rows:", df.duplicated().sum())
-
-# Remove duplicate rows
-df = df.drop_duplicates().reset_index(drop=True)
+print(
+    "Duplicate rows:",
+    df.duplicated().sum()
+)
 
 
 # ==========================================================
-# REMOVE TARGET COLUMN
+# REMOVE DUPLICATES
 # ==========================================================
 
-# Class is the known fraud label.
-# It is NOT used for training the unsupervised model.
+df = df.drop_duplicates(
+    ignore_index=True
+)
+
+
+# ==========================================================
+# REMOVE TARGET
+# ==========================================================
 
 if "Class" in df.columns:
+
     y_true = df["Class"].copy()
-    X = df.drop(columns=["Class"])
+
+    X = df.drop(
+        columns=["Class"]
+    )
+
 else:
+
     y_true = None
+
     X = df.copy()
 
 
@@ -75,19 +110,36 @@ else:
 # AUTOMATIC FEATURE SELECTION
 # ==========================================================
 
-# Keep numeric columns automatically
 numeric_features = X.select_dtypes(
-    include=["int64", "float64", "int32", "float32"]
+    include=[
+        "int64",
+        "float64",
+        "int32",
+        "float32"
+    ]
 ).columns.tolist()
 
-if len(numeric_features) == 0:
-    raise ValueError("No numerical features found in dataset.")
 
-X = X[numeric_features]
+if len(numeric_features) == 0:
+
+    raise ValueError(
+        "No numerical features found."
+    )
+
+
+X = X[
+    numeric_features
+].copy()
+
 
 print("\nSelected features:")
+
 for feature in numeric_features:
-    print(" -", feature)
+
+    print(
+        "✓",
+        feature
+    )
 
 
 # ==========================================================
@@ -95,6 +147,7 @@ for feature in numeric_features:
 # ==========================================================
 
 for column in numeric_features:
+
     X[column] = X[column].replace(
         [np.inf, -np.inf],
         np.nan
@@ -106,12 +159,16 @@ for column in numeric_features:
 
 
 # ==========================================================
-# FEATURE SCALING
+# SCALING
 # ==========================================================
+
+print("\nScaling features...")
 
 scaler = StandardScaler()
 
-X_scaled = scaler.fit_transform(X)
+X_scaled = scaler.fit_transform(
+    X
+)
 
 
 # ==========================================================
@@ -127,38 +184,24 @@ model = IsolationForest(
     n_jobs=-1
 )
 
-model.fit(X_scaled)
-
-
-# ==========================================================
-# TRAINING PREDICTIONS
-# ==========================================================
-
-predictions = model.predict(X_scaled)
-
-# Isolation Forest:
-# -1 = anomaly
-#  1 = normal
-
-anomaly_labels = np.where(
-    predictions == -1,
-    1,
-    0
+model.fit(
+    X_scaled
 )
-
-# Larger value = more normal
-decision_scores = model.decision_function(X_scaled)
-
-# Convert into easier anomaly score
-anomaly_scores = -decision_scores
 
 
 # ==========================================================
 # SAVE MODEL
 # ==========================================================
 
-joblib.dump(model, MODEL_FILE)
-joblib.dump(scaler, SCALER_FILE)
+joblib.dump(
+    model,
+    MODEL_FILE
+)
+
+joblib.dump(
+    scaler,
+    SCALER_FILE
+)
 
 feature_info = {
     "features": numeric_features,
@@ -166,54 +209,143 @@ feature_info = {
     "random_state": RANDOM_STATE
 }
 
-joblib.dump(feature_info, FEATURE_FILE)
+joblib.dump(
+    feature_info,
+    FEATURE_FILE
+)
+
+
+# ==========================================================
+# TRAINING PREDICTION
+# ==========================================================
+
+predictions = model.predict(
+    X_scaled
+)
+
+
+anomaly_labels = np.where(
+    predictions == -1,
+    1,
+    0
+)
+
+
+total = len(
+    anomaly_labels
+)
+
+anomalies = int(
+    anomaly_labels.sum()
+)
+
+normal = (
+    total - anomalies
+)
 
 
 # ==========================================================
 # RESULTS
 # ==========================================================
 
-total = len(anomaly_labels)
-anomalies = int(anomaly_labels.sum())
-normal = total - anomalies
-
-print("\n" + "=" * 60)
+print("\n" + "=" * 70)
 print("TRAINING COMPLETED")
-print("=" * 60)
+print("=" * 70)
 
-print("Total records :", total)
-print("Normal records:", normal)
-print("Anomalies     :", anomalies)
 print(
-    "Anomaly rate  :",
-    round((anomalies / total) * 100, 3),
+    "Total records:",
+    total
+)
+
+print(
+    "Normal:",
+    normal
+)
+
+print(
+    "Anomalies:",
+    anomalies
+)
+
+print(
+    "Anomaly rate:",
+    round(
+        anomalies / total * 100,
+        3
+    ),
     "%"
 )
 
+
+# ==========================================================
+# OPTIONAL EVALUATION
+# ==========================================================
+
 if y_true is not None:
 
-    actual_fraud = int(y_true.sum())
+    # Align target after duplicate removal
+    y_eval = y_true.loc[
+        X.index
+    ]
 
-    detected_fraud = int(
-        ((y_true == 1) & (anomaly_labels == 1)).sum()
+    actual_fraud = int(
+        y_eval.sum()
     )
 
-    print("\nKnown fraud records:", actual_fraud)
-    print("Detected known fraud:", detected_fraud)
+    detected_fraud = int(
+        (
+            (y_eval == 1)
+            &
+            (anomaly_labels == 1)
+        ).sum()
+    )
+
+    print(
+        "\nKnown fraud records:",
+        actual_fraud
+    )
+
+    print(
+        "Detected known fraud:",
+        detected_fraud
+    )
 
     if actual_fraud > 0:
-        recall = detected_fraud / actual_fraud
+
+        recall = (
+            detected_fraud
+            / actual_fraud
+        )
 
         print(
-            "Fraud detection recall:",
-            round(recall * 100, 2),
+            "Fraud recall:",
+            round(
+                recall * 100,
+                2
+            ),
             "%"
         )
 
 
-print("\nSaved files:")
-print(MODEL_FILE)
-print(SCALER_FILE)
-print(FEATURE_FILE)
+# ==========================================================
+# FILES
+# ==========================================================
 
-print("\nModel is ready.")
+print("\nCreated files:")
+
+print(
+    "✓",
+    MODEL_FILE
+)
+
+print(
+    "✓",
+    SCALER_FILE
+)
+
+print(
+    "✓",
+    FEATURE_FILE
+)
+
+print("\nModel ready.")
