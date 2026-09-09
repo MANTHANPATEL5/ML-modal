@@ -25,29 +25,21 @@ st.set_page_config(
 # CONFIGURATION
 # ==========================================================
 
+MAX_TRAIN_ROWS = 50000
+CHART_SAMPLE_SIZE = 5000
 DISPLAY_ROWS = 100
 
-# Maximum rows used for ML training.
-# This keeps large datasets such as creditcard.csv responsive.
-MAX_TRAIN_ROWS = 50000
-
-# Maximum rows used for charts.
-CHART_SAMPLE_SIZE = 5000
-
-# Isolation Forest configuration
 N_ESTIMATORS = 100
-CONTAMINATION = "auto"
 RANDOM_STATE = 42
 
 
 # ==========================================================
-# CUSTOM CSS
+# CSS
 # ==========================================================
 
 st.markdown(
     """
     <style>
-
     .main-title {
         text-align: center;
         font-size: 42px;
@@ -67,7 +59,6 @@ st.markdown(
         padding: 12px;
         border-radius: 10px;
     }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -98,56 +89,42 @@ st.markdown(
 
 st.sidebar.title("⚙️ Model Information")
 
-st.sidebar.info(
-    """
-    The system automatically:
+st.sidebar.success("AI Model Ready")
 
-    • Validates the CSV
-    • Selects numeric features
-    • Removes target columns
-    • Handles missing values
-    • Scales the data
-    • Trains Isolation Forest
-    • Detects anomalies
-    • Generates explanations
-    """
-)
-
-st.sidebar.markdown("---")
-
-st.sidebar.write(
-    "**Algorithm:** Isolation Forest"
-)
-
-st.sidebar.write(
-    "**Detection:** Unsupervised"
-)
-
-st.sidebar.write(
-    f"**Trees:** {N_ESTIMATORS}"
-)
-
+st.sidebar.write("**Algorithm:** Isolation Forest")
+st.sidebar.write("**Detection:** Unsupervised")
+st.sidebar.write(f"**Trees:** {N_ESTIMATORS}")
 st.sidebar.write(
     f"**Training Limit:** {MAX_TRAIN_ROWS:,} rows"
 )
 
 st.sidebar.markdown("---")
 
-st.sidebar.caption(
-    "No pre-trained .pkl files are required."
+st.sidebar.info(
+    "The system automatically selects numeric features "
+    "and excludes common target/label columns."
 )
 
 
 # ==========================================================
-# HELPER FUNCTIONS
+# LOAD CSV
+# ==========================================================
+
+@st.cache_data(show_spinner=False)
+def load_csv(file_bytes):
+
+    return pd.read_csv(
+        BytesIO(file_bytes)
+    )
+
+
+# ==========================================================
+# TARGET COLUMN DETECTION
 # ==========================================================
 
 def detect_target_columns(df):
-    """
-    Detect columns that should not be used as anomaly features.
-    """
 
-    target_names = [
+    target_names = {
         "class",
         "target",
         "label",
@@ -156,15 +133,15 @@ def detect_target_columns(df):
         "anomaly",
         "prediction",
         "output"
-    ]
+    }
 
     excluded = []
 
     for column in df.columns:
 
-        clean_name = str(column).strip().lower()
+        name = str(column).strip().lower()
 
-        if clean_name in target_names:
+        if name in target_names:
             excluded.append(column)
 
     return excluded
@@ -174,11 +151,7 @@ def detect_target_columns(df):
 # AUTOMATIC FEATURE SELECTION
 # ==========================================================
 
-def automatic_feature_selection(df):
-    """
-    Automatically select numeric columns while removing
-    target/label columns.
-    """
+def select_features(df):
 
     target_columns = detect_target_columns(df)
 
@@ -192,29 +165,25 @@ def automatic_feature_selection(df):
         if column not in target_columns
     ]
 
-    # Remove obvious ID/index columns when possible.
-    id_names = [
+    # Remove common ID columns
+    id_columns = {
         "id",
         "index",
         "transaction_id",
         "customer_id",
         "user_id"
-    ]
+    }
 
     filtered_features = []
 
     for column in features:
 
-        clean_name = str(column).strip().lower()
+        name = str(column).strip().lower()
 
-        if clean_name in id_names:
-            continue
+        if name not in id_columns:
+            filtered_features.append(column)
 
-        filtered_features.append(column)
-
-    # If removing ID columns leaves nothing,
-    # use all numeric columns except targets.
-    if len(filtered_features) > 0:
+    if filtered_features:
         features = filtered_features
 
     return features, target_columns
@@ -225,28 +194,20 @@ def automatic_feature_selection(df):
 # ==========================================================
 
 def prepare_features(df, features):
-    """
-    Prepare numeric feature matrix.
-    """
 
     X = df[features].copy()
 
-    # Replace infinite values
     X = X.replace(
         [np.inf, -np.inf],
         np.nan
     )
 
-    # Convert everything to numeric
     for column in features:
 
         X[column] = pd.to_numeric(
             X[column],
             errors="coerce"
         )
-
-    # Fill missing values using median
-    for column in features:
 
         median_value = X[column].median()
 
@@ -261,57 +222,33 @@ def prepare_features(df, features):
 
 
 # ==========================================================
-# MODEL TRAINING
+# TRAIN ISOLATION FOREST
 # ==========================================================
 
-@st.cache_resource(show_spinner=False)
-def train_ai_model(
-    training_data,
-    feature_names
-):
-    """
-    Train Isolation Forest automatically.
-
-    The model is trained only once for the uploaded dataset
-    because Streamlit caches the model.
-    """
+def train_model(X_train):
 
     scaler = StandardScaler()
 
-    X_train_scaled = scaler.fit_transform(
-        training_data
+    X_scaled = scaler.fit_transform(
+        X_train
     )
 
     model = IsolationForest(
         n_estimators=N_ESTIMATORS,
-        contamination=CONTAMINATION,
+        contamination="auto",
         random_state=RANDOM_STATE,
         n_jobs=-1
     )
 
     model.fit(
-        X_train_scaled
+        X_scaled
     )
 
     return model, scaler
 
 
 # ==========================================================
-# PROCESS DATASET
-# ==========================================================
-
-@st.cache_data(show_spinner=False)
-def load_csv(file_bytes):
-
-    df = pd.read_csv(
-        BytesIO(file_bytes)
-    )
-
-    return df
-
-
-# ==========================================================
-# CSV UPLOAD
+# FILE UPLOAD
 # ==========================================================
 
 st.header("📁 Upload CSV Dataset")
@@ -319,10 +256,7 @@ st.header("📁 Upload CSV Dataset")
 uploaded_file = st.file_uploader(
     "Upload your CSV dataset",
     type=["csv"],
-    help=(
-        "Upload creditcard.csv or any other "
-        "numeric business/IoT dataset."
-    )
+    help="Upload a CSV containing numeric business, transaction, or IoT data."
 )
 
 
@@ -351,9 +285,9 @@ Target Column Removal
      ↓
 Missing Value Handling
      ↓
-Standard Scaling
+Feature Scaling
      ↓
-Isolation Forest Training
+Isolation Forest
      ↓
 Anomaly Score
      ↓
